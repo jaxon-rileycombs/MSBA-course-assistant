@@ -5,8 +5,9 @@ answer"):
 1. response must parse as JSON with a non-empty string ``answer``
 2. every cited source must exist in the evidence actually retrieved
    (a citation to anything else is dropped and recorded as an issue)
-3. when the model says the materials cannot answer, the answer is flagged
-   ``missing_info`` and sources are expected to be empty
+3. an answer that ends up citing nothing is flagged ``missing_info`` —
+   a grounded answer must cite, so no sources means the materials were
+   not used (or not found)
 """
 
 from __future__ import annotations
@@ -16,9 +17,6 @@ import re
 
 from ..retrieval.evidence import Evidence
 from .schema import Answer, SourceRef
-
-UNANSWERABLE_HINTS = ("not in", "does not", "cannot", "unable", "no information",
-                      "materials do not cover", "could not find")
 
 
 def parse_json_payload(text: str) -> dict | None:
@@ -79,9 +77,8 @@ def validate_answer(payload: dict | None, evidence: list[Evidence]) -> tuple[Ans
             )
         )
 
-    lowered = answer_text.lower()
-    missing = not refs and any(hint in lowered for hint in UNANSWERABLE_HINTS)
-    if not refs and not missing:
-        issues.append("answer cites no sources and does not claim missing information")
+    missing = not refs
+    if not refs:
+        issues.append("answer cites no sources — flagged as missing information")
 
     return Answer(answer=answer_text.strip(), sources=refs, missing_info=missing), issues

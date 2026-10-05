@@ -15,7 +15,7 @@ import base64
 import mimetypes
 from pathlib import Path
 
-from ..clients import image_part, text_part
+from ..clients import chat_image_part, image_part, text_part
 from ..retrieval.evidence import Evidence
 from .prompt import NOT_FOUND_TEXT, build_prompt
 from .schema import Answer, SourceRef
@@ -27,19 +27,30 @@ class AnswerError(RuntimeError):
 
 
 class Answerer:
-    def __init__(self, client, *, max_evidence: int = 6, max_tokens: int = 1024):
+    def __init__(self, client, *, max_evidence: int = 16, max_images: int = 3,
+                 max_tokens: int = 1024):
         self.client = client
         self.max_evidence = max_evidence
+        self.max_images = max_images
         self.max_tokens = max_tokens
 
     def answer(self, question: str, evidence: list[Evidence]) -> Answer:
         evs = evidence[: self.max_evidence]
         if not evs:
             return Answer(answer=NOT_FOUND_TEXT, sources=[], missing_info=True)
-        return self._attempt(question, evs, repair=False)
+        seen: set[str] = set()
+        images: list[str] = []
+        for e in evs:
+            if e.image_path and e.image_path not in seen:
+                seen.add(e.image_path)
+                images.append(e.image_path)
+            if len(images) >= self.max_images:
+                break
+        return self._attempt(question, evs, images, repair=False)
 
-    def _attempt(self, question: str, evs: list[Evidence], repair: bool) -> Answer:
-        messages = self._messages(question, evs, repair)
+    def _attempt(self, question: str, evs: list[Evidence], images: list[str],
+                 repair: bool) -> Answer:
+        messages = self._messages(question, evs, images, repair)
         raw = self.client.chat(messages=messages, temperature=0.0,
                                max_tokens=self.max_tokens, json_mode=True)
         payload = parse_json_payload(raw)
@@ -53,24 +64,28 @@ class Answerer:
                 + ". Reply with ONLY the required JSON object now."
             )
             try:
-                return self._attempt(question, evs, repair=True)
+                return self._attempt(question, evs, images, repair=True)
             except AnswerError:
                 raise AnswerError(
                     "The model could not produce a valid, sourced answer. "
-                    "This is surfaced instead of showing an unvalidated response."
+                    "This is surfaced instead of showing an unvalidated response.",
                 ) from None
         raise AnswerError("model failed structured output twice")
 
-    def _messages(self, question: str, evs: list[Evidence], repair: bool) -> list[dict]:
-        prompt = build_prompt(question, evs)
+    def _messages(self, question: str, evs: list[Evidence], images: list[str],
+                  repair: bool) -> list[dict]:
+        prompt = build_prompt(question, evs, n_images=len(images))
         if repair:
             prompt = "Repair your JSON per the instruction. " + prompt
         content: list[dict] | str
-        top_image = evs[0].image_path
-        if top_image and Path(top_image).exists():
-            b64 = base64.b64encode(Path(top_image).read_bytes()).decode("ascii")
-            mime = mimetypes.guess_type(top_image)[0] or "image/png"
-            content = [text_part(prompt), image_part(b64, mime)]
+        if images:
+            content = [text_part(prompt)]
+            for path in images:
+                part = chat_image_part(path)  # downscaled; None if unreadable
+                if part is None:
+                    b64 = base64.b64encode(Path(path).read_bytes()).decode("ascii")
+                    part = image_part(b64, mimetypes.guess_type(path)[0] or "image/png")
+                content.append(part)
         else:
             content = prompt
         return [{"role": "user", "content": content}]

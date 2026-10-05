@@ -1,6 +1,6 @@
 # 🎓📚 MSBA Course Assistant
 
-[![tests](https://img.shields.io/badge/tests-110%20passed-success?style=flat-square&logo=pytest&logoColor=white)](.github/workflows/ci.yml)
+[![tests](https://img.shields.io/badge/tests-120%20passed-success?style=flat-square&logo=pytest&logoColor=white)](.github/workflows/ci.yml)
 [![status](https://img.shields.io/badge/status-complete%20%E2%9C%93-brightgreen?style=flat-square)]()
 [![mode](https://img.shields.io/badge/mode-hybrid%20RAG-blue?style=flat-square&logo=openai&logoColor=white)]()
 [![type](https://img.shields.io/badge/type-ask%20%E2%9C%A6%20quiz%20%E2%9C%94-orange?style=flat-square)]()
@@ -29,10 +29,10 @@ python app.py        # → http://127.0.0.1:7860
 
 | Feature | Behavior |
 |---|---|
-| **Grounded Q&A** | Ask about the syllabus, slides, or notes in the **Ask** tab. The app retrieves the most relevant evidence — keyword (BM25 with word-form matching) + text embeddings + visual embeddings — fuses it (reciprocal-rank fusion) and reranks it, then answers **only from that evidence**. Rephrased and synonym questions still land on the right material (e.g. "how is my grade calculated?" finds the syllabus breakdown). |
+| **Grounded Q&A** | Ask about the syllabus, slides, or notes in the **Ask** tab. The app retrieves the most relevant evidence — keyword (BM25 with word-form matching) + text embeddings + visual embeddings — fuses it (reciprocal-rank fusion) and reranks it, then answers **only from that evidence**. The model also sees up to three downscaled slide renders, so slides whose text extraction under-reads are still answerable, and rephrased/synonym questions land on the right material (e.g. "how is my grade calculated?" finds the syllabus breakdown). |
 | **Citable sources** | Every answer carries its sources: document, page/slide, section, a verbatim excerpt, and the original slide image for visual questions (e.g. locating a meme in the Week 2 deck). |
 | **No invented answers** | Answers come back as a validated JSON with separate `answer` and `sources` fields; any citation the model tries to invent is dropped, and questions the materials can't answer are acknowledged as such. |
-| **Practice quizzes** | The **Quiz** tab generates 2–5 multiple-choice questions grounded in a chosen material (plus optional topic filter). The answer key is fixed server-side, **solutions stay hidden until you answer or click *Show solutions***, scores match the key exactly, and explanations cite their sources. |
+| **Practice quizzes** | The **Quiz** tab generates 2–5 multiple-choice questions grounded in a chosen material (plus optional topic filter). Questions are stand-alone concept questions (never "according to the Week 2 deck…"), the answer never appears in the question text, options are balanced so the key isn't guessable by length, the correct option's position is randomized, and each question covers a different slide. The answer key is fixed server-side, **solutions stay hidden until you answer or click *Show solutions***, scores match the key exactly, and explanations cite their sources. |
 | **Material management** | The **Materials** tab loads PDF/PPTX/DOCX/MD/TXT/HTML files (deduplicated by content hash) and removes them — vectors, images, and registry go together. |
 | **Online / offline modes** | With the class-service API keys, everything runs on the real models (vision LLM, text + visual embeddings, reranker). Without keys the app still boots and runs — keyword retrieval plus clearly-labelled stand-ins — so a fresh clone is fully exercisable before keys are added. |
 
@@ -188,7 +188,7 @@ recommendation. Full rows: `results/eval_live.json` / `results/eval_live.md`.
 
 ## ✅ Testing and verification
 
-- **110 pytest tests** (`pytest -q`), all runnable without keys: parsing,
+- **120 pytest tests** (`pytest -q`), all runnable without keys: parsing,
   chunking, dedupe, removal cascade, retrieval + fusion + rerank wiring,
   structured-answer validation (bad JSON, un-retrieved citations dropped,
   missing-information handling), quiz validation with hidden solutions and
@@ -251,6 +251,6 @@ scripts/
   ingest.py              material management CLI (ingest/list/remove)
   evaluate.py            retrieval + answer-quality evaluation (results/ saved)
 docs/                    architecture diagram + screenshots
-tests/                   pytest suite (110 tests)
+tests/                   pytest suite (120 tests)
 materials/               course files (gitignored — Canvas downloads)
 ```

@@ -44,6 +44,34 @@ def image_part(base64: str, mime: str = "image/png") -> dict:
     return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{base64}"}}
 
 
+def chat_image_part(image_path: str, max_side: int = 512) -> dict | None:
+    """Resized image part for chat.
+
+    Slide renders are multi-MB at full size; a raw base64 data URL can push
+    the gateway's request-size limit. Downscale to ``max_side`` pixels and
+    re-encode as JPEG. Returns None when the file can't be read/resized —
+    callers then fall back to the raw bytes or skip the image.
+    """
+    try:
+        import base64 as _b64
+        import io as _io
+
+        from PIL import Image
+
+        with Image.open(image_path) as im:
+            w, h = im.size
+            scale = min(1.0, max_side / max(w, h))
+            if scale < 1.0:
+                im = im.resize(
+                    (max(1, int(w * scale)), max(1, int(h * scale))), Image.LANCZOS
+                )
+            buf = _io.BytesIO()
+            im.convert("RGB").save(buf, "JPEG", quality=82)
+        return image_part(_b64.b64encode(buf.getvalue()).decode("ascii"), "image/jpeg")
+    except Exception:
+        return None
+
+
 class _BaseClient:
     """Shared HTTP plumbing: auth header, retries, error sanitization."""
 

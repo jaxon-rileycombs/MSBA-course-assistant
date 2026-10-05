@@ -140,6 +140,47 @@ def test_validate_answer_rules():
     assert ans is not None and any("not in retrieved" in i for i in issues)
 
 
+def test_answerer_no_sources_flagged_missing():
+    llm = FakeLLM(['{"answer": "I could not find that anywhere.", "sources": []}'])
+    a = Answerer(llm).answer("hard question?", EV_BASE)
+    assert a.missing_info and a.sources == []
+
+
+def test_answerer_sends_downscaled_images_for_slide_heavy_evidence(tmp_path):
+    import base64 as _b64
+
+    PNG_1PX = _b64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    )
+    img_a = tmp_path / "a.png"
+    img_b = tmp_path / "b.png"
+    img_a.write_bytes(PNG_1PX)
+    img_b.write_bytes(PNG_1PX)
+    evs = [
+        Evidence(doc_id="d1", document="Week 2.pptx", page=33, section="Vibe",
+                 text="One does not simply vibe code a production-grade enterprise app.",
+                 image_path=str(img_a)),
+        Evidence(doc_id="d1", document="Week 2.pptx", page=34, section="Speed",
+                 text="Speculative decoding can double throughput in some settings.",
+                 image_path=str(img_b)),
+    ]
+    seen = {}
+
+    def spy(messages, kwargs):
+        seen["content"] = messages[0]["content"]
+
+    llm = FakeLLM([
+        '{"answer": "Both pages.", "sources": [{"document": "Week 2.pptx", "page": 33, "section": "", "excerpt": "vibe code"}]}'
+    ], on_messages=spy)
+    Answerer(llm).answer("what do the slides say?", evs)
+
+    content = seen["content"]
+    assert isinstance(content, list) and len(content) == 3  # text + 2 images
+    assert any(p["type"] == "image_url" for p in content[1:])
+    assert all(p["image_url"]["url"].startswith("data:image/jpeg;base64,") for p in content[1:])
+    assert "EVIDENCE IMAGES: 2 images" in content[0]["text"]
+
+
 def test_parse_json_payload_lenient():
     assert parse_json_payload('```json\n{"answer": "a"}\n```') == {"answer": "a"}
     assert parse_json_payload('prefix {"answer": "a"} suffix') == {"answer": "a"}

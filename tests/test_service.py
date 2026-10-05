@@ -177,3 +177,51 @@ def test_quiz_sampling_spreads_across_the_whole_deck(tmp_path):
     assert len(pages) == 3  # one sample unit per slide
     assert pages[0] == 1 and pages[-1] >= 9  # covers early AND late slides
 
+
+def test_scope_chunks_never_repeats_a_slide_when_avoidable(tmp_path):
+    """Two chunks on the same page must not both be quizzed — a quiz should
+    never ask twice about one slide while other slides go unused."""
+    from course_assistant.ingest.embeddings import HashEmbedder
+    from course_assistant.ingest.index import IndexStore
+    from course_assistant.retrieval.evidence import Evidence
+
+    deck = make_pptx(tmp_path / "Week 2.pptx", slides=2)
+    svc = CourseAssistant(
+        dirs=ServiceDirs(
+            vector_dir=str(tmp_path / "vec"),
+            images_root=str(tmp_path / "imgs"),
+            registry_path=str(tmp_path / "reg.json"),
+            quiz_dir=str(tmp_path / "quizzes"),
+        ),
+        force_offline=True,
+    )
+    svc.add_documents([str(deck)])
+
+    emb = HashEmbedder()
+    store = IndexStore(tmp_path / "vec2", emb.embed_texts, emb.embed_images)
+    # page 1 twice (like a long slide split into two chunks) + page 2 once
+    chunks = [
+        Evidence(doc_id="x" * 64, document="Week 2.pptx", page=1, section="A",
+                 text="First half of slide one content."),
+        Evidence(doc_id="x" * 64, document="Week 2.pptx", page=1, section="A",
+                 text="Second half of slide one content."),
+        Evidence(doc_id="x" * 64, document="Week 2.pptx", page=2, section="B",
+                 text="Slide two content."),
+    ]
+    store.text_col.upsert(
+        ids=["a", "b", "c"],
+        embeddings=[emb.embed_texts([c.text])[0] for c in chunks],
+        documents=[c.text for c in chunks],
+        metadatas=[
+            {"doc_id": c.doc_id, "document": c.document, "page": c.page,
+             "section": c.section, "image": ""}
+            for c in chunks
+        ],
+    )
+    svc._index = store
+    svc._refresh_keyword()
+
+    sampled = svc._scope_chunks("Week 2.pptx", 2)
+    assert len(sampled) == 2
+    assert sorted(e.page for e in sampled) == [1, 2]  # one chunk per slide
+

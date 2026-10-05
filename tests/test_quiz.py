@@ -61,11 +61,21 @@ def test_validate_questions_filters_bad_ones():
 
 
 def test_generator_parses_structured_quiz():
-    payload = {"quiz": [GOOD_Q, {**GOOD_Q, "question": "Second?", "sources": [{"document": "Syllabus.pdf", "page": 2}]}]}
+    second = {
+        "question": "What share of the grade is the final exam?",
+        "options": ["30 percent", "40 percent", "Half", "10 percent"],
+        "answer_index": 0,
+        "explanation": "The syllabus says the final exam is worth 30 percent of the grade.",
+        "sources": [{"document": "Syllabus.pdf", "page": 2}],
+    }
+    payload = {"quiz": [GOOD_Q, second]}
     llm = FakeLLM([json.dumps(payload)])
     qs = QuizGenerator(llm, n=2).generate(EVIDENCE)
     assert llm.calls == 1 and len(qs) == 2
-    assert qs[0].answer_index == 0 and qs[1].sources[0]["page"] == 2
+    # grounded: the correct option is present in the cited evidence
+    assert qs[0].sources[0]["page"] == 33
+    assert "30 percent" in EVIDENCE[2].text
+    assert qs[0].options[qs[0].answer_index] == "Production vibes"
 
 
 def test_generator_raises_when_not_enough_valid():
@@ -75,15 +85,36 @@ def test_generator_raises_when_not_enough_valid():
 
 
 def test_generator_honors_requested_count():
-    payload = {"quiz": [GOOD_Q, {**GOOD_Q, "question": "Second?"}, {**GOOD_Q, "question": "Third?"}]}
+    q2 = {"question": "What technique can roughly double throughput?",
+          "options": ["Speculative decoding", "Vibe coding", "Prompt tuning", "Reranking"],
+          "answer_index": 0,
+          "explanation": "The materials say speculative decoding can double throughput in some settings.",
+          "sources": [{"document": "Week 2.pptx", "page": 34}]}
+    q3 = {"question": "What share of the grade is the final exam?",
+          "options": ["30 percent", "40 percent", "Half", "10 percent"],
+          "answer_index": 0,
+          "explanation": "The syllabus says the final exam is worth 30 percent of the grade.",
+          "sources": [{"document": "Syllabus.pdf", "page": 2}]}
+    payload = {"quiz": [GOOD_Q, q2, q3]}
     llm = FakeLLM([json.dumps(payload)])
     qs = QuizGenerator(llm, n=5).generate(EVIDENCE, n=3)
     assert llm.calls == 1 and len(qs) == 3  # slider value wins, never more
+    assert sorted(q.sources[0]["page"] for q in qs) == [2, 33, 34]  # one slide each
 
 
 def test_generator_retries_once_when_short():
+    q2 = {"question": "What technique can roughly double throughput?",
+          "options": ["Speculative decoding", "Vibe coding", "Prompt tuning", "Reranking"],
+          "answer_index": 0,
+          "explanation": "The materials say speculative decoding can double throughput.",
+          "sources": [{"document": "Week 2.pptx", "page": 34}]}
+    q3 = {"question": "What share of the grade is the final exam?",
+          "options": ["30 percent", "40 percent", "Half", "10 percent"],
+          "answer_index": 0,
+          "explanation": "The syllabus says the final exam is worth 30 percent of the grade.",
+          "sources": [{"document": "Syllabus.pdf", "page": 2}]}
     short = json.dumps({"quiz": [GOOD_Q]})
-    full = json.dumps({"quiz": [GOOD_Q, {**GOOD_Q, "question": "Second?"}, {**GOOD_Q, "question": "Third?"}]})
+    full = json.dumps({"quiz": [GOOD_Q, q2, q3]})
     llm = FakeLLM([short, full])
     qs = QuizGenerator(llm, n=3).generate(EVIDENCE)
     assert llm.calls == 2 and len(qs) == 3  # second attempt filled the count
@@ -98,11 +129,27 @@ def test_generator_exact_count_never_more():
         Evidence(doc_id="d1", document="Week 2.pptx", page=37, section="More",
                  text="A third extra entry so there is more evidence than questions."),
     ]
-    payload = {"quiz": [GOOD_Q, {**GOOD_Q, "question": "B?"}, {**GOOD_Q, "question": "C?"},
-                        {**GOOD_Q, "question": "D?"}, {**GOOD_Q, "question": "E?"}]}
+    q2 = {"question": "What technique can roughly double throughput?",
+          "options": ["Speculative decoding", "Vibe coding", "Prompt tuning", "Reranking"],
+          "answer_index": 0,
+          "explanation": "The materials say speculative decoding can double throughput.",
+          "sources": [{"document": "Week 2.pptx", "page": 34}]}
+    q3 = {"question": "What share of the grade is the final exam?",
+          "options": ["30 percent", "40 percent", "Half", "10 percent"],
+          "answer_index": 0,
+          "explanation": "The syllabus says the final exam is worth 30 percent of the grade.",
+          "sources": [{"document": "Syllabus.pdf", "page": 2}]}
+    q4 = {"question": "What does the extra passage describe?",
+          "options": ["Extra evidence entry", "An exam policy", "A random topic", "Nothing at all"],
+          "answer_index": 0,
+          "explanation": "It is an extra evidence entry for a longer deck.",
+          "sources": [{"document": "Week 2.pptx", "page": 35}]}
+    q5 = {**GOOD_Q, "question": "A fifth question that repeats the first slide."}
+    payload = {"quiz": [GOOD_Q, q2, q3, q4, q5]}
     llm = FakeLLM([json.dumps(payload)])
     qs = QuizGenerator(llm, n=5).generate(enough_evidence, n=4)
-    assert len(qs) == 4 and llm.calls == 1  # model sent 5 — we keep exactly 4
+    assert len(qs) == 4 and llm.calls == 1  # model sent 5, one repeated a slide — keep 4
+    assert len({(q.sources[0]["document"], q.sources[0]["page"]) for q in qs}) == 4
 
 
 def test_session_hides_solutions_until_reveal(tmp_path):
@@ -150,3 +197,76 @@ def test_session_validates_answer_count(tmp_path):
     qid = s.create("V", [Question("Q?", ["a", "b"], 0, "e", [])])
     with pytest.raises(ValueError):
         s.submit(qid, [])
+
+
+# ---- strict-content rules (user: answers never given away, questions
+# ---- strictly about the material, no deck/week references) -------------
+
+def _validate(payload: dict, evidence=EVIDENCE) -> list[Question]:
+    return validate_questions(payload["quiz"], evidence)
+
+
+def test_options_prefix_labels_are_stripped():
+    q = {**GOOD_Q, "options": ["A. Production vibes", "B. Speculative decoding",
+                                "C: Grading", "D) Nothing"]}
+    out = _validate({"quiz": [q]})
+    assert len(out) == 1
+    assert set(out[0].options) == {"Production vibes", "Speculative decoding", "Grading", "Nothing"}
+    assert not any(re.match(r"^[A-D][.):]", o) for o in out[0].options)  # no prefix residue
+    assert out[0].options[out[0].answer_index] == "Production vibes"
+
+
+def test_deck_and_week_references_are_rejected():
+    for bad in ("According to the slides, what is the meme about?",
+                "What did we cover in week 2 about memory?",
+                "Which slide explains speculative decoding?",
+                "Per the course material, what is the meme about?"):
+        out = _validate({"quiz": [{**GOOD_Q, "question": bad}]})
+        assert out == [], f"should reject: {bad!r}"
+
+
+def test_question_that_gives_answer_away_is_rejected():
+    # question contains two+ significant words of the key -> leak
+    leaky = {**GOOD_Q, "question": "Which option describes production vibes?"}
+    assert _validate({"quiz": [leaky]}) == []
+
+
+def test_duplicate_questions_are_deduped():
+    payload = {"quiz": [GOOD_Q, {"question": "What is the   meme about?",
+                                  "options": ["z", "y", "x", "w"], "answer_index": 1,
+                                  "sources": [{"document": "Week 2.pptx", "page": 33}]}]}
+    out = _validate(payload)
+    assert len(out) == 1  # normalized text matches -> deduped
+
+
+def test_ungrounded_question_is_rejected():
+    # correct option appears nowhere in the cited page's text
+    q = {
+        "question": "Which color is the sky?",
+        "options": ["Blue", "Cyan", "Navy", "Azure"],
+        "answer_index": 0,
+        "explanation": "It just is.",
+        "sources": [{"document": "Week 2.pptx", "page": 33}],
+    }
+    assert _validate({"quiz": [q]}) == []  # 'blue' not in the vibe text
+
+
+def test_key_position_is_shuffled_deterministically():
+    q = {**GOOD_Q, "question": "A unique question seed for the shuffle."}
+    out = _validate({"quiz": [q]})
+    assert len(out) == 1
+    question = out[0]
+    import random
+
+    positions = list(range(4))
+    random.Random(question.question.strip()).shuffle(positions)
+    assert question.answer_index == positions.index(0)
+    assert question.options[question.answer_index] == "Production vibes"
+
+
+def test_no_two_questions_from_the_same_slide():
+    same_page = {**GOOD_Q, "question": "A different question on the very same page.",
+                 "options": ["Production vibes", "Something else", "Another", "Fourth"]}
+    payload = {"quiz": [GOOD_Q, same_page]}
+    out = _validate(payload)
+    assert len(out) == 1  # second question cites the already-used slide -> dropped

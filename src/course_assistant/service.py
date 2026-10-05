@@ -195,7 +195,17 @@ class CourseAssistant:
                     text=text,
                 )
             )
-        items = [(doc_id, chunks) for doc_id, chunks in by_doc.items() if chunks]
+        # one representative chunk per slide — a deck quiz never covers the
+        # same page twice while other slides go unused
+        by_page: dict[tuple[str, int], Evidence] = {}
+        for entries in by_doc.values():
+            for e in entries:
+                by_page.setdefault((e.document, e.page), e)
+        items = []
+        for doc_id, chunks in by_doc.items():
+            reps = [e for e in chunks if e is by_page[(e.document, e.page)]]
+            if reps:
+                items.append((doc_id, reps))
         total = sum(len(v) for _, v in items)
         if not total:
             return []
@@ -209,26 +219,40 @@ class CourseAssistant:
         # per-doc share proportional to size, at least 1 each
         shares = {doc_id: max(1, round(n * len(chunks) / total)) for doc_id, chunks in items}
         pool = {doc_id: _spread(chunks, shares[doc_id]) for doc_id, chunks in items}
-        out: list[Evidence] = []
-        while len(out) < n:
+
+        # round-robin the per-document picks into one coverage order
+        order: list[Evidence] = []
+        while True:
             progressed = False
             for doc_id, picked in list(pool.items()):
                 if not picked:
                     continue
-                out.append(picked.pop(0))
+                order.append(picked.pop(0))
                 progressed = True
-                if len(out) >= n:
-                    break
             if not progressed:
                 break
+
+        out = order[:n]
+        if len(out) < n:  # tiny corpus: cycle the order to reach the count
+            i = 0
+            while len(out) < n:
+                out.append(order[i % len(order)])
+                i += 1
         return out
 
     # -- ask ---------------------------------------------------------------
 
     def ask(self, question: str, scope: str = ALL_SCOPE, topic: str = "") -> Answer:
-        """Retrieve -> fuse -> (rerank) -> grounded answer with sources."""
+        """Retrieve -> fuse -> (rerank) -> grounded answer with sources.
+
+        A wide retrieval pool (24 candidates from 16 per leg) plus up to
+        three downscaled slide images attached to the vision model — slides
+        the text extraction under-reads are still answerable from their
+        render. Questions the materials genuinely don't cover are answered
+        as missing (no invention).
+        """
         query = f"{question} {topic}".strip() if topic else question
-        evidence = self._scope_evidence(self._hybrid.retrieve(query, k=16), scope)
+        evidence = self._scope_evidence(self._hybrid.retrieve(query, k=24, per_retriever=16), scope)
         try:
             return self.answerer.answer(question, evidence)
         except AnswerError as exc:

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import random
 import re
 from dataclasses import asdict
 
@@ -26,8 +27,65 @@ def _extract_questions(payload: dict | None) -> list[dict] | None:
     return raw if isinstance(raw, list) else (payload.get("questions") if isinstance(payload.get("questions"), list) else None)
 
 
-def validate_questions(raw: list, allowed: set[tuple[str, int]]) -> list[Question]:
-    """Keep only well-formed questions whose sources were actually supplied."""
+def _sig_tokens(text: str) -> set[str]:
+    """Significant tokens (>=4 alnum chars) — used for leak/grounding checks."""
+    return set(re.findall(r"[a-z0-9]{4,}", text.lower()))
+
+
+BANNED_QUESTION = re.compile(
+    r"\bweek\s*\d|\bslides?\b|\bdeck\b|according to|course material", re.I
+)
+
+
+def _strip_option_prefix(o: str) -> str:
+    """Drop a leading 'A.' / 'B)' label the model sometimes adds."""
+    return re.sub(r"^\s*[A-D][.):]\s*", "", o).strip()
+
+
+def _question_leaks_answer(qtext: str, key: str) -> bool:
+    return len(_sig_tokens(qtext) & _sig_tokens(key)) >= 2
+
+
+def _grounded_in(key: str, explanation: str, cited_text: str) -> bool:
+    """The correct option (or a verbatim explanation phrase) must appear in
+    the cited evidence — keeps questions strictly tied to the material."""
+    if not cited_text:
+        return True  # no verifiable source -> keep (validated elsewhere)
+    if _sig_tokens(key) & _sig_tokens(cited_text):
+        return True
+    expl = re.findall(r"[a-z0-9]{3,}", explanation.lower())
+    cited = " ".join(re.findall(r"[a-z0-9]{3,}", cited_text.lower()))
+    return any(" ".join(expl[i : i + 6]) in cited for i in range(len(expl) - 5))
+
+
+def _shuffle_key(options: list[str], key: int, seed_text: str) -> tuple[list[str], int]:
+    """Randomize the correct option's position (deterministic per question
+    text) so the key never sits in a predictable slot."""
+    positions = list(range(len(options)))
+    random.Random(seed_text.strip()).shuffle(positions)
+    new_key = positions.index(key)
+    return [options[i] for i in positions], new_key
+
+
+def validate_questions(raw: list, evidence) -> list[Question]:
+    """Keep only well-formed questions that are strictly grounded.
+
+    ``evidence`` is the retrieved :class:`Evidence` list (for grounding
+    checks); a plain set of (document, page) is also accepted (grounding
+    checks are skipped). Filtered out: questions whose text references the
+    deck/week/slide, questions that give the answer away, duplicates,
+    weakly-grounded questions, and anything with an unretrieved source.
+    The remaining questions get their key position shuffled.
+    """
+    evidence_list = [e for e in evidence] if not isinstance(evidence, set) else []
+    allowed = (
+        {(e.document, e.page) for e in evidence_list}
+        if evidence_list
+        else set(evidence or {})
+    )
+    text_by_page = {(e.document, e.page): e.text for e in evidence_list}
+    seen: set[str] = set()
+    used_pages: set[tuple[str, int]] = set()  # one question per slide
     questions: list[Question] = []
     for q in raw:
         if not isinstance(q, dict):
@@ -41,15 +99,42 @@ def validate_questions(raw: list, allowed: set[tuple[str, int]]) -> list[Questio
             continue
         if not isinstance(key, int) or not 0 <= key < len(options):
             continue
+        text = text.strip()
+        options = [_strip_option_prefix(o) for o in options[:4]]
+
+        # stand-alone question: never reference the deck/week/slide
+        if BANNED_QUESTION.search(text):
+            continue
+        # no duplicates (same question asked twice)
+        norm = re.sub(r"\W+", " ", text.lower()).strip()
+        if norm in seen:
+            continue
+        # the question must not give the answer away
+        if _question_leaks_answer(text, options[key]):
+            continue
+        # sources must be among the supplied evidence
         sources = []
         for s in q.get("sources", []) or []:
             if isinstance(s, dict) and isinstance(s.get("document"), str) and isinstance(s.get("page"), int):
                 if (s["document"], s["page"]) in allowed:
                     sources.append({"document": s["document"], "page": s["page"]})
+        # strictly tied to the cited material
+        if sources and not _grounded_in(
+            options[key], str(q.get("explanation", "")), text_by_page.get((sources[0]["document"], sources[0]["page"]), "")
+        ):
+            continue
+        # a quiz covers the deck: no two questions from the same slide
+        if sources and (sources[0]["document"], sources[0]["page"]) in used_pages:
+            continue
+
+        seen.add(norm)
+        if sources:
+            used_pages.add((sources[0]["document"], sources[0]["page"]))
+        options, key = _shuffle_key(options, key, text)
         questions.append(
             Question(
-                question=text.strip(),
-                options=[o.strip() for o in options[:4]],
+                question=text,
+                options=options,
                 answer_index=key,
                 explanation=str(q.get("explanation", "")).strip(),
                 sources=sources,
@@ -58,19 +143,22 @@ def validate_questions(raw: list, allowed: set[tuple[str, int]]) -> list[Questio
     return questions
 
 
-QUIZ_PROMPT = """You are a course assistant for MBAX 6418. Using ONLY the EVIDENCE below, write {n} multiple-choice quiz questions that ARE answerable from this material, one per evidence entry.
+QUIZ_PROMPT = """You are an exam writer for MBAX 6418. Write {n} multiple-choice quiz questions, each answerable from EXACTLY ONE entry of the EVIDENCE below. Use a different entry per question when possible.
 
-EVIDENCE (each: [document | slide | section] text):
+EVIDENCE (each entry: [N] material text):
 {evidence}
 
 Reply with ONE JSON object, no extra text:
-{{"quiz": [{{"question": "...", "options": ["A", "B", "C", "D"], "answer_index": 0, "explanation": "...", "sources": [{{"document": "<filename>", "page": <int>}}]}}]}}
+{{"quiz": [{{"question": "...", "options": ["opt1", "opt2", "opt3", "opt4"], "answer_index": 0, "explanation": "...", "sources": [{{"document": "<filename>", "page": <int>}}]}}]}}
 
-Rules:
-- Exactly {n} questions; four options each; one clearly correct answer.
-- answer_index is the position of the correct option (0-3).
-- explanation must say WHY and reference the material.
-- sources must only use documents/pages from EVIDENCE."""
+Hard rules:
+- Ask the CONCEPT directly. Never mention week numbers, deck names, slide numbers, sections, or use openers like "According to the course materials".
+- The question text must NEVER contain or hint at the correct option. Write the question before the options.
+- Options: exactly four, plain text (no "A." / "1)" prefixes), similar length and style, all plausible. The correct one must NOT be the longest, most hedged, or only specific option.
+- Vary the position of the correct option (answer_index 0-3); do not always use the same slot.
+- Each question must be answerable from the cited EVIDENCE entry alone — never from outside knowledge.
+- explanation: 1-2 sentences, citing what the material says.
+- sources: only documents/pages present in EVIDENCE."""
 
 
 class QuizGenerator:
@@ -90,7 +178,6 @@ class QuizGenerator:
         want = min(n or self.n, len(chunks))
         if not chunks or want < 1:
             return []
-        allowed = {(e.document, e.page) for e in chunks}
         evidence_txt = "\n".join(
             f"{i}. [{e.document} | slide {e.page}" + (f" | {e.section}" if e.section else "") + f"] {e.text[:500]}"
             for i, e in enumerate(chunks[:want], 1)
@@ -105,7 +192,7 @@ class QuizGenerator:
                 json_mode=True,
             )
             extracted = _extract_questions(parse_json_payload(raw))
-            questions = validate_questions(extracted if extracted is not None else [], allowed)
+            questions = validate_questions(extracted if extracted is not None else [], chunks[:want])
             if len(questions) >= want:
                 break
         if len(questions) < min(2, want):
@@ -122,13 +209,13 @@ class OfflineQuizGenerator:
         want = min(n or 5, len(chunks))
         questions = []
         for e in chunks[:want]:
-            options = [e.section or e.document, "The syllabus", "A random topic", "None of the above"]
             questions.append(
                 Question(
-                    question=f"Per the materials, what is the topic shown on {e.document}, slide {e.page}?",
-                    options=options,
+                    question="Which topic does the material cover?",
+                    options=[e.section or "The topic shown", "The syllabus",
+                             "A random topic", "None of the above"],
                     answer_index=0,
-                    explanation=f"The material for this slide is titled “{e.section}”. "
+                    explanation=f"The cited material is “{e.section}” from {e.document}, slide {e.page}. "
                                 f"Full text: {e.text[:300]}",
                     sources=[{"document": e.document, "page": e.page}],
                 )
