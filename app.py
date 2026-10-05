@@ -169,7 +169,7 @@ def build_app(service: CourseAssistant | None = None) -> gr.Blocks:
             with gr.Row():
                 with gr.Column(scale=3):
                     scope = gr.Dropdown(choices=scope_choices(service), value=ALL_SCOPE, label="Material")
-                    topic = gr.Textbox(placeholder="Optional topic filter (e.g. 'memory' or 'grading')", label="Topic filter")
+                    topic = gr.Textbox(placeholder="Optional — limits answers to material mentioning this word (e.g. 'grading')", label="Topic filter")
                     question = gr.Textbox(show_label=False, placeholder="Ask something about the course materials…", lines=2, elem_id="ask_question")
                     ask_btn = gr.Button("Ask", variant="primary", elem_id="ask_btn")
                     answer_md = gr.Markdown()

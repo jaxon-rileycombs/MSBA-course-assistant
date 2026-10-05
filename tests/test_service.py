@@ -104,12 +104,18 @@ def test_quiz_flow_hides_grades_reveals(app):
     assert revealed["questions"][0]["explanation"]
 
 
-def test_topic_filter_used_in_query_and_quiz(app):
+def test_topic_filter_limits_evidence(app):
     svc, deck = app
     svc.add_documents([str(deck)])
-    answer = svc.ask("what is this about?", topic="nothing-matches")
-    # offline answerer still returns top evidence; the filter is passed to retrieval
-    assert "Week 2.pptx" in answer.answer
+    # a topic with no match anywhere -> explicit message, no silent mixing
+    answer = svc.ask("what is this about?", topic="suchness-not-in-corpus")
+    assert answer.missing_info
+    assert "mentions the topic" in answer.answer
+
+    # a matching topic -> only chunks mentioning it are used
+    answer2 = svc.ask("what?", topic="embedded")  # 'embedded concepts' in the deck text
+    assert "Slide 2 title" in answer2.answer or "embedded" in answer2.answer.lower()
+    assert answer2.sources and all("Week 2.pptx" == s.document for s in answer2.sources)
 
 
 def test_quiz_on_empty_index_raises_friendly_runtime_error(tmp_path):

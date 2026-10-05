@@ -34,6 +34,7 @@ from .retrieval.keyword import KeywordRetriever
 from .retrieval.rerank import ServiceReranker
 
 ALL_SCOPE = "All materials"
+MAX_ASK_EVIDENCE = 16  # evidence slots budget for the answer prompt
 
 
 @dataclass
@@ -248,11 +249,24 @@ class CourseAssistant:
         A wide retrieval pool (24 candidates from 16 per leg) plus up to
         three downscaled slide images attached to the vision model — slides
         the text extraction under-reads are still answerable from their
-        render. Questions the materials genuinely don't cover are answered
-        as missing (no invention).
+        render. The optional topic filter is STRICT: when set, only chunks
+        that mention the topic are used, and if none do, the app says so
+        instead of silently answering from unrelated material. Questions
+        the materials genuinely don't cover are answered as missing (no
+        invention).
         """
-        query = f"{question} {topic}".strip() if topic else question
-        evidence = self._scope_evidence(self._hybrid.retrieve(query, k=24, per_retriever=16), scope)
+        evidence = self._scope_evidence(self._hybrid.retrieve(question, k=24, per_retriever=16), scope)
+        if topic:
+            topic = topic.strip().lower()
+            topical = [e for e in evidence if topic in e.text.lower() or topic in (e.section or "").lower()]
+            if not topical:
+                return Answer(
+                    answer=f"No material in the selected scope mentions the topic “{topic}”. "
+                           "Try a different topic, or clear the topic filter.",
+                    sources=[],
+                    missing_info=True,
+                )
+            evidence = topical[:MAX_ASK_EVIDENCE]
         try:
             return self.answerer.answer(question, evidence)
         except AnswerError as exc:
