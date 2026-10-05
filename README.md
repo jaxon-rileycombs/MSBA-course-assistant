@@ -7,11 +7,14 @@ Built with hybrid RAG: keyword search (BM25) + text embeddings + visual
 embeddings, fused and reranked, with grounded answers and citable evidence
 (document + page/slide + verbatim excerpt + original images).
 
-> **Status:** building incrementally against the task list in the GitHub
-> issues. What works today: parsing & chunking, dedupe, retrieval evaluation,
-> config/clients/CI. What is coming: vector indexes (issue #3), hybrid
-> retrieval + rerank (issue #4), grounded answering (issue #5), citations
-> (issue #6), quiz engine (issue #7), UI + final report (issue #8).
+> **Status: building incrementally** against the task list in the GitHub
+> issues. What works today: parsing & chunking, dedupe, registry, retrieval
+> evaluation, config/clients/CI. What is coming: vector indexes (issue #3),
+> hybrid retrieval + rerank (issue #4), grounded answering (issue #5),
+> citations (issue #6), quiz engine (issue #7), UI + screenshots + final
+> report (issue #8). The architecture diagram below matches this design; the
+> team verifies it against the finished app at submission and explains the
+> findings in their own words.
 
 ---
 
@@ -21,7 +24,7 @@ embeddings, fused and reranked, with grounded answers and citable evidence
 
 - **Python 3.11+** (developed and tested on 3.13)
 - Network access to the class services at `dobolyi.com` (ports 9001–9005)
-  and a working set of **API keys** (see step 3)
+  and a working set of **API keys** (step 3)
 - Optional: **LibreOffice** (macOS: `brew install --cask libreoffice`) — only
   needed to render full slides as images from PPTX via PDF conversion.
   Manual PDF export of a deck is an acceptable workaround.
@@ -61,7 +64,7 @@ cp .env.example .env
 ### 4. Verify the install
 
 ```bash
-pytest -m "not integration" -q     # expect: all tests pass (45+)
+pytest -m "not integration" -q     # expect: all tests pass (48+)
 python scripts/evaluate.py --save-md   # local retrieval evaluation over materials/
 ```
 
@@ -71,10 +74,7 @@ are marked and skipped).
 ### 5. Ingest materials
 
 Course materials (slides, syllabus, other files from Canvas) go in
-`materials/`. The ingest pipeline (`scripts/ingest.py`, issue #3) parses,
-dedupes by content hash, extracts page/slide images, and indexes text + visual
-embeddings. A document can then be removed — which deletes its searchable
-content everywhere.
+`materials/` (gitignored):
 
 ```
 materials/
@@ -83,10 +83,64 @@ materials/
   ...
 ```
 
+The ingest pipeline (`scripts/ingest.py`, issue #3) parses, dedupes by
+content hash, extracts page/slide images, and indexes text + visual
+embeddings. A document can then be removed — which deletes its searchable
+content everywhere.
+
 ### 6. Launch the app
 
 `python -m course_assistant.ui` starts the Gradio interface (issue #8) with
 tabs for Materials, Ask, and Quiz. Requires the class services (issued keys).
+
+---
+
+## Usage
+
+- **Add a document:** upload a file (PDF, PPTX, DOCX, MD, TXT, HTML) in the
+  Materials tab. Loading the same file twice is a no-op (sha256 identity).
+- **Remove a document:** delete it in the Materials tab — its index entries,
+  extracted images, and registry entry are removed, so later answers never
+  rely on it.
+- **Ask a question:** type it in the Ask tab (optionally restrict to one
+  material). The app shows the answer with document + page/slide number +
+  verbatim excerpt, and the original slide image for visual questions.
+  Questions the materials can't answer are acknowledged as such — the app
+  never invents answers or citations.
+- **Ask about a diagram/chart:** the vision LLM describes the retrieved
+  slide image; the image itself is shown as evidence.
+- **Generate a quiz:** pick a material (+ optional topic filter) in the Quiz
+  tab. Multiple-choice questions are grounded in that material; the answer
+  key is fixed server-side; solutions stay hidden until you answer or click
+  "Show answers"; scores and explanations (with sources) follow.
+- **Rerun tests:** `pytest -m "not integration" -q`.
+
+---
+
+## Architecture
+
+![Architecture diagram](docs/architecture.svg)
+
+**Component / service map** — what runs where:
+
+| Component | Model / tool | Where it runs |
+|---|---|---|
+| Gradio UI (Materials · Ask · Quiz) | gradio | local |
+| Parsing (text) | PyMuPDF, python-pptx, python-docx, stdlib (dots.mocr on 9005 optional) | local |
+| Page/slide image extraction | PyMuPDF renders, embedded picture extraction | local |
+| Chunking | langchain-text-splitters (recursive, 1200/150) | local |
+| Registry / dedupe / removal cascade | JSON registry + ChromaDB delete-by-doc | local |
+| Keyword retrieval | bm25s | local |
+| Text embeddings | Nemotron-3-Embed-1B (9002) | dobolyi.com |
+| Visual embeddings | Qwen3-VL-Embedding-2B (9003) | dobolyi.com |
+| Text / visual indexes | ChromaDB (separate collections) | local storage |
+| Reranking | Qwen3-VL-Reranker-2B (9004) | dobolyi.com |
+| Answer + quiz generation | Qwen3.6-35B vision LLM (9001) | dobolyi.com |
+
+Text and visual indexes are kept **separate** (assignment requirement);
+retrieval runs keyword + text-embedding + visual-embedding in parallel, fuses
+the candidates, reranks, and supplies the best evidence (chunks + images) to
+the generative steps.
 
 ---
 
@@ -155,6 +209,41 @@ report with per-question answers, source-support checks, and timings
 
 ---
 
+## Findings — limitations and failures investigated
+
+- **Same-second registry timestamps** broke newest-first ordering — found by
+  a unit test, fixed with microsecond timestamps (regression test added).
+- **HTML text stripper split inline fragments** ("Para one" became
+  "Para\none") — found by a test, fixed by joining fragments with spaces.
+- **Slide titles carried control characters** (`\x0b` soft line breaks from
+  PowerPoint) — found while parsing the real Week 2 deck, normalized.
+- **Unhandled network failures** on service outage — a raw requests exception
+  escaped; now retries then raises a clean `ClassAPIError`, and
+  `require_keys()` gives a clear, key-free message before any request.
+- **pypdf could not parse the syllabus PDF** ("wrong pointing object" xref
+  errors) — switched parsing to PyMuPDF, which handles the file cleanly.
+- **API keys are redacted in the shared endpoint doc** (verified: all class
+  services return 401 without keys). Whole-service integration and
+  answer-quality evaluation remain blocked until the team supplies keys —
+  everything else is exercised with mocks/fakes.
+- **LibreOffice is not installed here** — PPTX→PDF slide rendering is
+  implemented but only mock-tested; the `pages == slides` check runs once
+  LibreOffice is installed.
+- **Markdown/HTML image extraction is not implemented** — text is indexed;
+  embedded images in those formats are a known gap.
+
+---
+
+## Screenshots
+
+Pending the UI build-out (issue #8). Final submission will include:
+
+1. An answer displaying a supporting slide image (e.g. the Week 2 "Vibe
+   Coding on Prod" meme with its source citation: document + slide 33).
+2. Quiz feedback with sources (score + explanations citing the material).
+
+---
+
 ## Repository layout
 
 ```
@@ -164,6 +253,7 @@ src/course_assistant/
   ingest/            parsing (formats.py), chunking, registry, LibreOffice convert
   eval/              question set + evaluation harness
 scripts/             evaluate.py (repeatable comparisons; results/ saved)
+docs/architecture.svg
 tests/               pytest: unit + env-gated integration
 materials/           course files (gitignored — Canvas downloads)
 ```
