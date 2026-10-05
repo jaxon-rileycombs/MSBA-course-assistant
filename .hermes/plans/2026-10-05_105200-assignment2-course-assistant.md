@@ -24,7 +24,7 @@ local `.env`.
 
 ## Current context & assumptions
 
-- Repo: `jaxon-rileycombs/MSBA-course-assistant` (new, public). Fresh, no code.
+- Repo: `jaxon-rileycombs/MSBA-course-assistant` (new, private). Fresh, no code.
 - Class services are reachable and have FastAPI `/docs` (confirmed 9001–9005).
 - Auth keys: the user adds them to local `.env`; nothing real is committed.
 - Materials: user downloads slides/syllabus/other from Canvas into
