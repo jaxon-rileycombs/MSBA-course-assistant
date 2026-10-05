@@ -12,7 +12,6 @@
 /data/images/
 /data/parsed/
 /results/*.jsonl
-/results/*.json
 
 # ---- Python ----
 __pycache__/

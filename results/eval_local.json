@@ -1,0 +1,306 @@
+[
+  {
+    "config": "chunk_page",
+    "question_id": "Q1-syllabus-software",
+    "kind": "text",
+    "recall_at_k": 1,
+    "hit_position": 3,
+    "retrieval_seconds": 0.0004,
+    "top_documents": [
+      "MBAX 6418 - Week 3 - Prompt Engineering v1.pptx",
+      "MBAX 6418 - Week 4 - Serving and Debugging v6.pptx",
+      "MBAX 6418 Syllabus Fall 2026.pdf"
+    ],
+    "top_pages": [
+      26,
+      15,
+      3
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_page",
+    "question_id": "Q2-vibe-vs-agentic",
+    "kind": "text",
+    "recall_at_k": 1,
+    "hit_position": 1,
+    "retrieval_seconds": 0.0002,
+    "top_documents": [
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx",
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx",
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx"
+    ],
+    "top_pages": [
+      30,
+      2,
+      36
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_page",
+    "question_id": "Q3-meme",
+    "kind": "visual",
+    "recall_at_k": 1,
+    "hit_position": 1,
+    "retrieval_seconds": 0.0002,
+    "top_documents": [
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx",
+      "MBAX 6418 Syllabus Fall 2026.pdf",
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx"
+    ],
+    "top_pages": [
+      33,
+      7,
+      2
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_page",
+    "question_id": "Q4-hardware",
+    "kind": "visual",
+    "recall_at_k": 1,
+    "hit_position": 1,
+    "retrieval_seconds": 0.0001,
+    "top_documents": [
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx",
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx",
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx"
+    ],
+    "top_pages": [
+      24,
+      26,
+      16
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_page",
+    "question_id": "Q5-open-closed",
+    "kind": "text",
+    "recall_at_k": 1,
+    "hit_position": 2,
+    "retrieval_seconds": 0.0001,
+    "top_documents": [
+      "MBAX 6418 - Week 6 - Multimodal Generative AI v1.pptx",
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx",
+      "MBAX 6418 - Week 6 - Multimodal Generative AI v1.pptx"
+    ],
+    "top_pages": [
+      18,
+      4,
+      4
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_page",
+    "question_id": "Q6-speculative",
+    "kind": "text",
+    "recall_at_k": 1,
+    "hit_position": 1,
+    "retrieval_seconds": 0.0001,
+    "top_documents": [
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx",
+      "MBAX 6418 - Week 4 - Serving and Debugging v6.pptx",
+      "MBAX 6418 - Week 4 - Serving and Debugging v6.pptx"
+    ],
+    "top_pages": [
+      13,
+      16,
+      24
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_page",
+    "question_id": "Q7-serving-debugging",
+    "kind": "text",
+    "recall_at_k": 1,
+    "hit_position": 2,
+    "retrieval_seconds": 0.0001,
+    "top_documents": [
+      "MBAX 6418 Syllabus Fall 2026.pdf",
+      "MBAX 6418 - Week 4 - Serving and Debugging v6.pptx",
+      "MBAX 6418 - Week 4 - Serving and Debugging v6.pptx"
+    ],
+    "top_pages": [
+      7,
+      2,
+      1
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_page",
+    "question_id": "Q8-unanswerable",
+    "kind": "unanswerable",
+    "recall_at_k": 0,
+    "hit_position": null,
+    "retrieval_seconds": 0.0001,
+    "top_documents": [
+      "MBAX 6418 - Week 4 - Serving and Debugging v6.pptx",
+      "MBAX 6418 - Week 4 - Serving and Debugging v6.pptx",
+      "MBAX 6418 - Week 3 - Prompt Engineering v1.pptx"
+    ],
+    "top_pages": [
+      11,
+      12,
+      18
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_recursive",
+    "question_id": "Q1-syllabus-software",
+    "kind": "text",
+    "recall_at_k": 1,
+    "hit_position": 1,
+    "retrieval_seconds": 0.0002,
+    "top_documents": [
+      "MBAX 6418 Syllabus Fall 2026.pdf",
+      "MBAX 6418 Syllabus Fall 2026.pdf",
+      "MBAX 6418 - Week 3 - Prompt Engineering v1.pptx"
+    ],
+    "top_pages": [
+      4,
+      3,
+      26
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_recursive",
+    "question_id": "Q2-vibe-vs-agentic",
+    "kind": "text",
+    "recall_at_k": 1,
+    "hit_position": 1,
+    "retrieval_seconds": 0.0001,
+    "top_documents": [
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx",
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx",
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx"
+    ],
+    "top_pages": [
+      30,
+      2,
+      36
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_recursive",
+    "question_id": "Q3-meme",
+    "kind": "visual",
+    "recall_at_k": 1,
+    "hit_position": 1,
+    "retrieval_seconds": 0.0001,
+    "top_documents": [
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx",
+      "MBAX 6418 Syllabus Fall 2026.pdf",
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx"
+    ],
+    "top_pages": [
+      33,
+      7,
+      2
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_recursive",
+    "question_id": "Q4-hardware",
+    "kind": "visual",
+    "recall_at_k": 1,
+    "hit_position": 1,
+    "retrieval_seconds": 0.0001,
+    "top_documents": [
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx",
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx",
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx"
+    ],
+    "top_pages": [
+      24,
+      26,
+      16
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_recursive",
+    "question_id": "Q5-open-closed",
+    "kind": "text",
+    "recall_at_k": 1,
+    "hit_position": 2,
+    "retrieval_seconds": 0.0001,
+    "top_documents": [
+      "MBAX 6418 - Week 6 - Multimodal Generative AI v1.pptx",
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx",
+      "MBAX 6418 - Week 6 - Multimodal Generative AI v1.pptx"
+    ],
+    "top_pages": [
+      18,
+      4,
+      4
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_recursive",
+    "question_id": "Q6-speculative",
+    "kind": "text",
+    "recall_at_k": 1,
+    "hit_position": 1,
+    "retrieval_seconds": 0.0001,
+    "top_documents": [
+      "MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx",
+      "MBAX 6418 - Week 4 - Serving and Debugging v6.pptx",
+      "MBAX 6418 - Week 4 - Serving and Debugging v6.pptx"
+    ],
+    "top_pages": [
+      13,
+      16,
+      24
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_recursive",
+    "question_id": "Q7-serving-debugging",
+    "kind": "text",
+    "recall_at_k": 1,
+    "hit_position": 2,
+    "retrieval_seconds": 0.0001,
+    "top_documents": [
+      "MBAX 6418 Syllabus Fall 2026.pdf",
+      "MBAX 6418 - Week 4 - Serving and Debugging v6.pptx",
+      "MBAX 6418 - Week 4 - Serving and Debugging v6.pptx"
+    ],
+    "top_pages": [
+      7,
+      2,
+      1
+    ],
+    "note": ""
+  },
+  {
+    "config": "chunk_recursive",
+    "question_id": "Q8-unanswerable",
+    "kind": "unanswerable",
+    "recall_at_k": 0,
+    "hit_position": null,
+    "retrieval_seconds": 0.0001,
+    "top_documents": [
+      "MBAX 6418 - Week 4 - Serving and Debugging v6.pptx",
+      "MBAX 6418 - Week 4 - Serving and Debugging v6.pptx",
+      "MBAX 6418 - Week 3 - Prompt Engineering v1.pptx"
+    ],
+    "top_pages": [
+      11,
+      12,
+      18
+    ],
+    "note": ""
+  }
+]
