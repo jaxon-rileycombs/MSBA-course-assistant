@@ -72,7 +72,8 @@ def test_answerer_parses_valid_structured_response(tmp_path):
 
     a = Answerer(llm).answer("what does the meme say?", evs)
     assert a.answer == "You need a plan, not vibes."
-    assert a.sources[0].page == 33 and a.sources[0].image_path == "img.png"
+    assert a.sources[0].page == 33
+    assert a.sources[0].image_path == str(tmp_path / "img.png")
     assert captured["json_mode"] is True
 
 
