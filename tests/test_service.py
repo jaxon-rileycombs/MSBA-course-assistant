@@ -208,11 +208,11 @@ def test_scope_chunks_never_repeats_a_slide_when_avoidable(tmp_path):
     # page 1 twice (like a long slide split into two chunks) + page 2 once
     chunks = [
         Evidence(doc_id="x" * 64, document="Week 2.pptx", page=1, section="A",
-                 text="First half of slide one content."),
+                 text="First half of slide one content with enough words to matter here."),
         Evidence(doc_id="x" * 64, document="Week 2.pptx", page=1, section="A",
-                 text="Second half of slide one content."),
+                 text="Second half of the same slide one content, still long enough."),
         Evidence(doc_id="x" * 64, document="Week 2.pptx", page=2, section="B",
-                 text="Slide two content."),
+                 text="Slide two content, deliberately longer than the title floor."),
     ]
     store.text_col.upsert(
         ids=["a", "b", "c"],

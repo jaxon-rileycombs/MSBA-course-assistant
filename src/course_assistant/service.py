@@ -197,14 +197,17 @@ class CourseAssistant:
                 )
             )
         # one representative chunk per slide — a deck quiz never covers the
-        # same page twice while other slides go unused
+        # same page twice; and skip text-poor title/transition slides, which
+        # only ever produce "which module is this?" trivia
         by_page: dict[tuple[str, int], Evidence] = {}
         for entries in by_doc.values():
             for e in entries:
+                if len(e.text.strip()) < 40:
+                    continue  # title/transition slides: no quiz content
                 by_page.setdefault((e.document, e.page), e)
         items = []
         for doc_id, chunks in by_doc.items():
-            reps = [e for e in chunks if e is by_page[(e.document, e.page)]]
+            reps = [e for e in chunks if by_page.get((e.document, e.page)) is e]
             if reps:
                 items.append((doc_id, reps))
         total = sum(len(v) for _, v in items)
@@ -214,6 +217,8 @@ class CourseAssistant:
         def _spread(chunks: list[Evidence], k: int) -> list[Evidence]:
             if k >= len(chunks):
                 return list(chunks)  # small doc: take everything
+            if k == 1:
+                return [chunks[len(chunks) // 2]]  # never a title slide
             step = len(chunks) / k
             return [chunks[int(j * step)] for j in range(k)]
 
@@ -276,7 +281,7 @@ class CourseAssistant:
 
     def generate_quiz(self, scope: str = ALL_SCOPE, topic: str = "", n: int = 5,
                       title: str = "") -> tuple[str, dict]:
-        chunks = self._scope_chunks(scope, n * 2)
+        chunks = self._scope_chunks(scope, n * 4)
         if not chunks:
             raise RuntimeError(
                 "No course materials are indexed yet — add documents in the "
@@ -286,7 +291,7 @@ class CourseAssistant:
             filtered = [c for c in chunks if topic.lower() in c.text.lower()]
             if filtered:
                 chunks = filtered
-        questions = self.quizgen.generate(chunks[: n * 2], n=n)
+        questions = self.quizgen.generate(chunks[: n * 4], n=n)
         quiz_id = self.sessions.create(title or "Generated quiz", questions)
         return quiz_id, self.sessions.get(quiz_id)
 

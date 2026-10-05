@@ -47,12 +47,18 @@ def _question_leaks_answer(qtext: str, key: str) -> bool:
 
 
 def _grounded_in(key: str, explanation: str, cited_text: str) -> bool:
-    """The correct option (or a verbatim explanation phrase) must appear in
-    the cited evidence — keeps questions strictly tied to the material."""
+    """The question is tied to the cited material when the correct option OR
+    the explanation overlaps it: paraphrased answers are fine as long as the
+    explanation restates the material (>=2 significant shared tokens or a
+    6-token verbatim phrase)."""
     if not cited_text:
         return True  # no verifiable source -> keep (validated elsewhere)
-    if _sig_tokens(key) & _sig_tokens(cited_text):
-        return True
+    cited_toks = _sig_tokens(cited_text)
+    if _sig_tokens(key) & cited_toks:
+        return True  # verbatim answer: strongest grounding
+    expl_toks = _sig_tokens(explanation)
+    if len(expl_toks & cited_toks) >= 2:
+        return True  # explanation restates the material
     expl = re.findall(r"[a-z0-9]{3,}", explanation.lower())
     cited = " ".join(re.findall(r"[a-z0-9]{3,}", cited_text.lower()))
     return any(" ".join(expl[i : i + 6]) in cited for i in range(len(expl) - 5))
@@ -178,21 +184,27 @@ class QuizGenerator:
         want = min(n or self.n, len(chunks))
         if not chunks or want < 1:
             return []
-        evidence_txt = "\n".join(
-            f"{i}. [{e.document} | slide {e.page}" + (f" | {e.section}" if e.section else "") + f"] {e.text[:500]}"
-            for i, e in enumerate(chunks[:want], 1)
-        )
         questions: list[Question] = []
-        for attempt in range(2):
+        for attempt in range(4):
+            # rotate a fresh window of slides per attempt so a bad draw
+            # doesn't get retried against the same evidence
+            start = 0
+            if len(chunks) > want:
+                start = (attempt * want) % (len(chunks) - want + 1)
+            window = chunks[start : start + want]
+            evidence_txt = "\n".join(
+                f"{i}. [{e.document} | slide {e.page}" + (f" | {e.section}" if e.section else "") + f"] {e.text[:700]}"
+                for i, e in enumerate(window, 1)
+            )
             prompt = QUIZ_PROMPT.format(n=want, evidence=evidence_txt)
             raw = self.client.chat(
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.0 if attempt == 0 else 0.2,
+                temperature=(0.0, 0.2, 0.4, 0.6)[attempt],
                 max_tokens=self.max_tokens,
                 json_mode=True,
             )
             extracted = _extract_questions(parse_json_payload(raw))
-            questions = validate_questions(extracted if extracted is not None else [], chunks[:want])
+            questions = validate_questions(extracted if extracted is not None else [], window)
             if len(questions) >= want:
                 break
         if len(questions) < min(2, want):
