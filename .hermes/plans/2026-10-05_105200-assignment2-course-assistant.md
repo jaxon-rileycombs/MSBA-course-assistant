@@ -12,10 +12,13 @@ class LLM answers with strict `answer` + `sources` JSON from the retrieved
 evidence; a quiz engine generates grounded multiple-choice questions with a
 fixed server-side answer key. Gradio UI on top.
 
-**Tech stack:** Python 3.11+, bm25s, langchain-text-splitters, chromadb,
-gradio; class services at dobolyi.com (ports 9001+): chat LLMs (9001, 9005),
-text/visual embeddings + rerank (9002/9003), classify/rerank (9004). Exact
-role↔port mapping per team connection details (user-provided, local `.env`).
+**Tech stack:** Python 3.11+, bm25s, langchain-text-splitters, chromadb, gradio;
+class services at dobolyi.com (role map confirmed from the team's
+`class-endpoints.txt`): vision LLM (9001, Qwen3.6-35B VLM), text embeddings
+(9002, Nemotron-3-Embed-1B), visual embeddings (9003, Qwen3-VL-Embedding-2B),
+multimodal rerank (9004, Qwen3-VL-Reranker-2B), document parsing (9005,
+dots.mocr). Port 9000 (Hermes) is reserved — do not use. Keys live only in
+local `.env`.
 
 ---
 
@@ -129,13 +132,15 @@ is part of issue 1.
 
 ## Risks & open questions
 
-- Exact role↔port mapping for the five services + parsing endpoint path —
-  pending team connection details (user adds to `.env`).
-- Which LLM is vision-capable (9001 vs 9005) — verify via `/docs` once details
-  arrive; diagrams fall back to caption/alt evidence otherwise.
-- Query→visual-space embedding approach — will validate against the class
-  visual service's documented API before finalizing.
-- Class services are plain HTTP on campus network — treat as trusted-network,
-  keys still required; do not use outside campus without review.
-- Materials depend on the user's Canvas download — golden corpus defines
-  reproducible tests meanwhile.
+- **API keys are REDACTED in the shared class-endpoints.txt** (4-char
+  placeholders). All five services return 401 without a key (verified). Real
+  keys are pending from the team — they go only into local `.env`. Code and
+  unit tests proceed with mocks meanwhile; integration work is gated on keys.
+- dots.mocr (9005) request format — vLLM-served; consult `/docs` and the HF
+  page; fall back to local libs (pypdf, python-pptx) for text extraction.
+- Query→visual-space embedding approach — validate against the visual
+  service's documented API (`/v1/embeddings` vs `/v2/embed`) before finalizing.
+- Class services are plain HTTP on campus network — treat as trusted-network;
+  do not use outside campus without review.
+- Materials in place (7 files): syllabus PDF, Weeks 2–6 slide decks, Local
+  Inference deck — golden corpus for reproducible tests.
