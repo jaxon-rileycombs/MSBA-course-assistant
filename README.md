@@ -263,3 +263,27 @@ materials/           course files (gitignored — Canvas downloads)
 - Keys only in server-side env vars / a local `.env`; never in the UI,
   browser code, logs, errors, screenshots, docs, tests, or GitHub.
 - `.env.example` carries dummy values; CI scans for leaked key material.
+
+---
+
+## Glossary (unfamiliar terms)
+
+| Term | Meaning |
+|---|---|
+| **RAG** (retrieval-augmented generation) | Look up relevant material first, then generate the answer *from it* — answers stay grounded in sources instead of being invented. |
+| **Chunking** | Splitting documents into smaller pieces so retrieval can find the exact page/slide/section that answers a question. |
+| **Embedding** | A vector (list of numbers) capturing meaning — similar text or images get similar vectors, enabling semantic search. |
+| **Text vs visual embeddings** | Embeddings of words (Nemotron, port 9002) vs. of page/slide images (Qwen3-VL, port 9003). |
+| **BM25** | Classic keyword scoring used by the keyword retriever (bm25s library). |
+| **Vector index (ChromaDB)** | A database that finds nearest vectors quickly; here text and visual vectors live in **two separate collections**. |
+| **Hybrid fusion** | Combining results from keyword + text + visual retrieval (score-normalized, weighted) into one candidate list. |
+| **Reranking** | A model (Qwen3-VL-Reranker, port 9004) that reorders fused candidates so the best evidence comes first. |
+| **Evidence bundle** | The top retrieved chunks + images handed to the LLM together with the question. |
+| **Structured output** | The model must return JSON with separate `answer` and `sources` fields; the app validates both. |
+| **Answer key** | The fixed correct-answer mapping for a generated quiz, stored server-side and never regenerated or revealed early. |
+| **Citation / excerpt** | For each source: document name, page/slide, section, and a verbatim quote (or screenshot) — with the original image for visuals. |
+| **sha256 dedupe** | A document's fingerprint (hash of the file bytes); re-uploading the same file is detected and ignored. |
+| **Topic filter** | Narrowing quiz generation to a chosen subtopic of the selected material. |
+| **Missing-information handling** | When evidence is insufficient, the app says "not in the materials" instead of guessing. |
+| **Endpoint** | A service's URL (e.g. `http://dobolyi.com:9001/v1`); each port runs a different model service. |
+| **LibreOffice** | Free office suite whose headless mode converts PPTX → PDF for slide rendering (optional — manual PDF export also works). |

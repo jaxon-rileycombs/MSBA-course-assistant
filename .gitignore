@@ -11,6 +11,7 @@
 /.chroma/
 /data/images/
 /data/parsed/
+/data/registry.json
 /results/*.jsonl
 
 # ---- Python ----
