@@ -9,17 +9,22 @@ index interfaces (batched calls, query-vs-image modes).
 
 from __future__ import annotations
 
+from typing import Sequence
+
 
 class TextEmbedderAdapter:
     def __init__(self, client, batch_size: int = 64):
         self.client = client
         self.batch_size = batch_size
 
-    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+    def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
         out: list[list[float]] = []
         for i in range(0, len(texts), self.batch_size):
-            out.extend(self.client.embed(texts[i : i + self.batch_size]))
+            out.extend(self.client.embed(list(texts[i : i + self.batch_size])))
         return out
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.client.embed(text)[0]
 
 
 class VisualEmbedderAdapter:
@@ -27,10 +32,10 @@ class VisualEmbedderAdapter:
         self.client = client
         self.batch_size = batch_size
 
-    def embed_images(self, image_paths: list[str]) -> list[list[float]]:
+    def embed_images(self, image_paths: Sequence[str]) -> list[list[float]]:
         out: list[list[float]] = []
         for i in range(0, len(image_paths), self.batch_size):
-            out.extend(self.client.embed_images(image_paths[i : i + self.batch_size]))
+            out.extend(self.client.embed_images(list(image_paths[i : i + self.batch_size])))
         return out
 
     def embed_query(self, text: str) -> list[float]:

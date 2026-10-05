@@ -79,15 +79,15 @@ def test_session_hides_solutions_until_reveal(tmp_path):
     s = QuizSession(tmp_path)
     qid = s.create("Quiz 1", questions)
 
-    view = s.get()
+    view = s.get(qid)
     assert "answer_index" not in view["questions"][0]
     assert "explanation" not in view["questions"][0]
 
-    r = s.submit([0])
+    r = s.submit(qid, [0])
     assert r.score == 1 and r.total == 1 and r.correct == [True]
     assert r.feedback[0]["explanation"] == "because"
 
-    revealed = s.reveal()
+    revealed = s.reveal(qid)
     assert revealed["questions"][0]["answer_index"] == 0
 
 
@@ -98,26 +98,24 @@ def test_session_score_matches_key_exactly(tmp_path):
         Question("Q3?", ["a", "b", "c", "d"], 0, "e", [{"document": "Syllabus.pdf", "page": 2}]),
     ]
     s = QuizSession(tmp_path)
-    s.create("T", questions)
-    r = s.submit([2, 1, 0])
+    qid = s.create("T", questions)
+    r = s.submit(qid, [2, 1, 0])
     assert (r.score, r.total, r.correct) == (3, 3, [True, True, True])
-    bad = QuizSession(tmp_path)
-    bad.quiz_id = s.quiz_id
-    r2 = bad.submit([0, 2, 1])  # every answer wrong on purpose
+    r2 = s.submit(qid, [0, 2, 1])  # every answer wrong on purpose
     assert (r2.score, r2.correct) == (0, [False, False, False])
 
 
 def test_session_persists_and_reloads(tmp_path):
     s = QuizSession(tmp_path)
-    s.create("P", [Question("Q?", ["a", "b"], 1, "e", [{"document": "Week 2.pptx", "page": 33}])])
-    s2 = QuizSession(tmp_path, quiz_id=s.quiz_id)
-    assert s2.get()["title"] == "P"
-    assert s2.submit([1]).score == 1
-    assert [q["quiz_id"] for q in s2.list_all()] == [s.quiz_id]
+    qid = s.create("P", [Question("Q?", ["a", "b"], 1, "e", [{"document": "Week 2.pptx", "page": 33}])])
+    s2 = QuizSession(tmp_path)
+    assert s2.get(qid)["title"] == "P"
+    assert s2.submit(qid, [1]).score == 1
+    assert [q["quiz_id"] for q in s2.list_all()] == [qid]
 
 
 def test_session_validates_answer_count(tmp_path):
     s = QuizSession(tmp_path)
-    s.create("V", [Question("Q?", ["a", "b"], 0, "e", [])])
+    qid = s.create("V", [Question("Q?", ["a", "b"], 0, "e", [])])
     with pytest.raises(ValueError):
-        s.submit([])
+        s.submit(qid, [])
