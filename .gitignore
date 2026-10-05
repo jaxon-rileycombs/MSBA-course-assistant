@@ -11,8 +11,8 @@
 /.chroma/
 /data/images/
 /data/parsed/
+/data/registry.json
 /results/*.jsonl
-/results/*.json
 
 # ---- Python ----
 __pycache__/
