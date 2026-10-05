@@ -1,4 +1,9 @@
-# MSBA Course Assistant
+# 🎓📚 MSBA Course Assistant
+
+[![tests](https://img.shields.io/badge/tests-110%20passed-success?style=flat-square&logo=pytest&logoColor=white)](.github/workflows/ci.yml)
+[![status](https://img.shields.io/badge/status-complete%20%E2%9C%93-brightgreen?style=flat-square)]()
+[![mode](https://img.shields.io/badge/mode-hybrid%20RAG-blue?style=flat-square&logo=openai&logoColor=white)]()
+[![type](https://img.shields.io/badge/type-ask%20%E2%9C%A6%20quiz%20%E2%9C%94-orange?style=flat-square)]()
 
 A course assistant that **answers questions about the course materials** and
 **generates practice quizzes** from the class slides, syllabus, and other
@@ -7,7 +12,7 @@ text embeddings + visual embeddings, fused and reranked, so every answer is
 grounded in citable evidence — document, slide, verbatim excerpt, and the
 original slide image.
 
-## Try the app
+## 🚀 Try the app
 
 ▶ **Live demo:** https://2c45c15301521b3094.gradio.live
 *(temporary share link — up to ~1 week; recreate with `SHARE=1 python app.py`)*
@@ -20,7 +25,7 @@ python app.py        # → http://127.0.0.1:7860
 
 ---
 
-## What it does
+## 🎯 What it does
 
 | Feature | Behavior |
 |---|---|
@@ -31,7 +36,7 @@ python app.py        # → http://127.0.0.1:7860
 | **Material management** | The **Materials** tab loads PDF/PPTX/DOCX/MD/TXT/HTML files (deduplicated by content hash) and removes them — vectors, images, and registry go together. |
 | **Online / offline modes** | With the class-service API keys, everything runs on the real models (vision LLM, text + visual embeddings, reranker). Without keys the app still boots and runs — keyword retrieval plus clearly-labelled stand-ins — so a fresh clone is fully exercisable before keys are added. |
 
-## Running the app
+## ⚙️ Running the app
 
 ### 1. What you need
 
@@ -90,7 +95,7 @@ keys are present, otherwise `offline (no class-service API keys detected)`.
 
 ---
 
-## Architecture — retrieval, answering, and quizzes
+## 🏗️ Architecture — retrieval, answering, and quizzes
 
 ![Architecture diagram](docs/architecture.svg)
 
@@ -124,7 +129,7 @@ material, validated against a `question/options/answer_index/explanation`
 schema, and stored in a per-session key server-side. Grading is exact
 (score == key) and solutions are revealed only on demand.
 
-## Using the app — the three tabs
+## 🖱️ Using the app — the three tabs
 
 - **Ask** — type a question; optionally restrict to one material or a topic
   filter. The answer shows its sources and the original slide image when
@@ -135,7 +140,7 @@ schema, and stored in a per-session key server-side. Grading is exact
 - **Materials** — upload files to add them with dedupe; remove a document to
   purge its vectors, images, and registry entry.
 
-## Accepted file formats
+## 📄 Accepted file formats
 
 | Format | Parsing | Page/slide images |
 |---|---|---|
@@ -145,7 +150,7 @@ schema, and stored in a per-session key server-side. Grading is exact
 | `.md` / `.txt` | raw text | — |
 | `.html` | tag-stripped text | — |
 
-## Evaluation — retrieval and answer quality
+## 📊 Evaluation — retrieval and answer quality
 
 Question set (8 questions, `src/course_assistant/eval/questions.py`): syllabus
 text (Q1), slide text (Q2, Q5–Q7), **visuals** (Q3 = Week 2 "Vibe Coding on
@@ -181,7 +186,7 @@ hits, 0.8–2.8 s each); Q8 is acknowledged rather than invented, and Q7
 honestly reports that the retrieved evidence lacks the specific
 recommendation. Full rows: `results/eval_live.json` / `results/eval_live.md`.
 
-## Testing and verification
+## ✅ Testing and verification
 
 - **110 pytest tests** (`pytest -q`), all runnable without keys: parsing,
   chunking, dedupe, removal cascade, retrieval + fusion + rerank wiring,
@@ -197,7 +202,7 @@ recommendation. Full rows: `results/eval_live.json` / `results/eval_live.md`.
 - **CI** (GitHub Actions): pytest on every push plus a secret-leak scan that
   fails the build if `.env` or a key string appears in the repository.
 
-## Screenshots (live, class services)
+## 🖼️ Screenshots (live, class services)
 
 *Captured against the real services: hybrid retrieval + model answers over the
 actual course corpus.*
@@ -221,7 +226,7 @@ cascade):
 
 ![Materials tab](docs/screenshots/materials.png)
 
-## API-key security
+## 🔐 API-key security
 
 - Keys exist only in server-side environment variables / a local `.env`;
   never in the UI, browser code, logs, error messages, screenshots, docs,
@@ -229,7 +234,7 @@ cascade):
 - `.env.example` carries dummy values; CI scans for leaked key material and
   `.env` is gitignored.
 
-## Repository layout
+## 📁 Repository layout
 
 ```
 app.py                   Gradio app (python app.py; SHARE=1 python app.py for a public link)
