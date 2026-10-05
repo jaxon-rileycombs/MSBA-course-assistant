@@ -1,0 +1,30 @@
+# ---- Secrets (NEVER commit) ----
+.env
+.env.local
+.env.*.local
+
+# ---- Course materials (Canvas downloads) ----
+/materials/
+
+# ---- Vector store & extracted artifacts ----
+/vectorstore/
+/.chroma/
+/data/images/
+/data/parsed/
+/results/*.jsonl
+/results/*.json
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- OS / editors ----
+.DS_Store
+.idea/
+.vscode/
