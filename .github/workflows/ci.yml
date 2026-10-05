@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests (no live class services)
+        run: pytest -m "not integration" -q
+
+      - name: Forbid committed .env
+        run: |
+          if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+            echo "::error::'.env' is tracked by git — never commit real keys."
+            exit 1
+          fi
+          git check-ignore .env >/dev/null \
+            || { echo "::error::'.env' is not covered by .gitignore."; exit 1; }
+
+      - name: Scan for leaked secret material
+        run: |
+          set +e
+          hits=$(grep -rInE \
+            '(sk-[A-Za-z0-9]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY)' \
+            --exclude-dir=.git --exclude-dir=__pycache__ --exclude-dir=.venv \
+            --exclude='*.pptx' --exclude='*.pdf' --exclude='*.png' .)
+          if [ -n "$hits" ]; then
+            echo "::error::Possible secret material found in the repository:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "secret scan clean"
