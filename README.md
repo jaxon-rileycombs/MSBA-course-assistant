@@ -9,7 +9,7 @@ original slide image.
 
 ## Try the app
 
-▶ **Live demo:** https://64fc2269f77278036d.gradio.live
+▶ **Live demo:** https://2c45c15301521b3094.gradio.live
 *(temporary share link — up to ~1 week; recreate with `SHARE=1 python app.py`)*
 
 Run it locally in one command after installing (see [Running the app](#running-the-app)):
@@ -24,7 +24,7 @@ python app.py        # → http://127.0.0.1:7860
 
 | Feature | Behavior |
 |---|---|
-| **Grounded Q&A** | Ask about the syllabus, slides, or notes in the **Ask** tab. The app retrieves the most relevant evidence — keyword (BM25) + text embeddings + visual embeddings — fuses it (reciprocal-rank fusion) and reranks it, then answers **only from that evidence**. |
+| **Grounded Q&A** | Ask about the syllabus, slides, or notes in the **Ask** tab. The app retrieves the most relevant evidence — keyword (BM25 with word-form matching) + text embeddings + visual embeddings — fuses it (reciprocal-rank fusion) and reranks it, then answers **only from that evidence**. Rephrased and synonym questions still land on the right material (e.g. "how is my grade calculated?" finds the syllabus breakdown). |
 | **Citable sources** | Every answer carries its sources: document, page/slide, section, a verbatim excerpt, and the original slide image for visual questions (e.g. locating a meme in the Week 2 deck). |
 | **No invented answers** | Answers come back as a validated JSON with separate `answer` and `sources` fields; any citation the model tries to invent is dropped, and questions the materials can't answer are acknowledged as such. |
 | **Practice quizzes** | The **Quiz** tab generates 2–5 multiple-choice questions grounded in a chosen material (plus optional topic filter). The answer key is fixed server-side, **solutions stay hidden until you answer or click *Show solutions***, scores match the key exactly, and explanations cite their sources. |
@@ -183,7 +183,7 @@ recommendation. Full rows: `results/eval_live.json` / `results/eval_live.md`.
 
 ## Testing and verification
 
-- **102 pytest tests** (`pytest -q`), all runnable without keys: parsing,
+- **110 pytest tests** (`pytest -q`), all runnable without keys: parsing,
   chunking, dedupe, removal cascade, retrieval + fusion + rerank wiring,
   structured-answer validation (bad JSON, un-retrieved citations dropped,
   missing-information handling), quiz validation with hidden solutions and
@@ -246,6 +246,6 @@ scripts/
   ingest.py              material management CLI (ingest/list/remove)
   evaluate.py            retrieval + answer-quality evaluation (results/ saved)
 docs/                    architecture diagram + screenshots
-tests/                   pytest suite (102 tests)
+tests/                   pytest suite (110 tests)
 materials/               course files (gitignored — Canvas downloads)
 ```

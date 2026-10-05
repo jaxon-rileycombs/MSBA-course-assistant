@@ -58,6 +58,36 @@ def test_keyword_finds_distinctive_term(hybrid):
     assert "vibe code" in hits[0][0].text  # only chunk containing the term
 
 
+def test_keyword_stemming_matches_word_forms(tmp_path):
+    """Related word forms match: 'graded' / 'grading' / 'grades' all stem to
+    the same token, so a question phrased differently still finds the slide."""
+    from course_assistant.ingest.documents import Document, Page
+
+    emb = HashEmbedder()
+    index = IndexStore(tmp_path / "vec", emb.embed_texts, emb.embed_images)
+    doc = Document(
+        doc_id="s" * 64,
+        filename="syllabus.pdf",
+        format=".pdf",
+        source_path="syllabus.pdf",
+        pages=[
+            Page(number=1, text="The final exam grading policy is described on the next page.",
+                 section="Grading", image_paths=[]),
+            Page(number=2, text="Summaries, quizzes, and the exam each carry a weight toward the final grade.",
+                 section="Weights", image_paths=[]),
+        ],
+    )
+    chunks = chunk_document(doc)
+    index.upsert_document(doc, chunks)
+    kw = KeywordRetriever.from_index(index)
+
+    for query in ("how are grades determined", "how is the course graded", "grading weights"):
+        hits = kw.top_k(query, k=2)
+        assert hits, f"query {query!r} matched nothing"
+        top = hits[0][0]
+        assert any(w in top.text for w in ("grading", "grade")), f"{query!r} → {top.text[:60]}"
+
+
 def test_text_embedding_retriever_returns_evidence(hybrid):
     hits = hybrid.text_embedding.top_k("vibe coding", k=3)
     assert hits[0][0].section == "Vibe Coding on Prod"
