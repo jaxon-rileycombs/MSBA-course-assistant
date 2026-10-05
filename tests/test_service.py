@@ -110,3 +110,33 @@ def test_topic_filter_used_in_query_and_quiz(app):
     answer = svc.ask("what is this about?", topic="nothing-matches")
     # offline answerer still returns top evidence; the filter is passed to retrieval
     assert "Week 2.pptx" in answer.answer
+
+
+def test_quiz_on_empty_index_raises_friendly_runtime_error(tmp_path):
+    svc = CourseAssistant(
+        dirs=ServiceDirs(
+            vector_dir=str(tmp_path / "vec"),
+            images_root=str(tmp_path / "imgs"),
+            registry_path=str(tmp_path / "reg.json"),
+            quiz_dir=str(tmp_path / "quizzes"),
+        ),
+        force_offline=True,
+    )
+    with pytest.raises(RuntimeError, match="No course materials are indexed yet"):
+        svc.generate_quiz(n=3)
+
+
+def test_ask_on_empty_index_acknowledges_missing_information(tmp_path):
+    svc = CourseAssistant(
+        dirs=ServiceDirs(
+            vector_dir=str(tmp_path / "vec"),
+            images_root=str(tmp_path / "imgs"),
+            registry_path=str(tmp_path / "reg.json"),
+            quiz_dir=str(tmp_path / "quizzes"),
+        ),
+        force_offline=True,
+    )
+    answer = svc.ask("What is the final exam worth?")
+    assert answer.missing_info
+    assert answer.sources == []
+    assert "could not" in answer.answer.lower() or "not" in answer.answer.lower()

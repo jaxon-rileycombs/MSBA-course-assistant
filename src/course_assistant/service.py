@@ -216,6 +216,11 @@ class CourseAssistant:
     def generate_quiz(self, scope: str = ALL_SCOPE, topic: str = "", n: int = 5,
                       title: str = "") -> tuple[str, dict]:
         chunks = self._scope_chunks(scope, n * 2)
+        if not chunks:
+            raise RuntimeError(
+                "No course materials are indexed yet — add documents in the "
+                "Materials tab first."
+            )
         if topic:
             filtered = [c for c in chunks if topic.lower() in c.text.lower()]
             if filtered:
