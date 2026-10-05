@@ -1,10 +1,12 @@
 """Hybrid retrieval: combine keyword + text-embedding + visual-embedding
-candidates, score-normalize, weight, merge, optionally rerank.
+candidates and rerank, keeping text and visual indexes separate in storage.
 
-Combining (assignment): keep text and visual indexes separate in storage,
-but combine their search results at query time and rerank the candidates so
-the best evidence — including relevant images — is supplied to the answer
-step alongside the question.
+Fusion = Reciprocal Rank Fusion (RRF). Scores from different retrievers
+live on incomparable scales (BM25 raw scores vs cosine vs the class
+reranker), and min-max normalization lets one noisy retriever flip a
+near-tie; RRF fuses RANKS (``weight / (K + rank)``), which is scale-immune
+and much less sensitive to tie noise. The reranker (off by default here,
+wired in online mode) then reorders the fused list with its own model score.
 """
 
 from __future__ import annotations
@@ -16,16 +18,7 @@ from .evidence import Evidence
 # reranker: query, ordered texts -> scores in the same order (higher = better)
 Reranker = Callable[[str, list[str]], list[float]]
 
-
-def _normalize(pairs: Sequence[tuple[Evidence, float]]) -> list[tuple[Evidence, float]]:
-    """Min-max normalize scores to [0, 1]; empty list -> []."""
-    if not pairs:
-        return []
-    vals = [s for _, s in pairs]
-    lo, hi = min(vals), max(vals)
-    if hi - lo < 1e-12:
-        return [(e, 1.0) for e, _ in pairs]
-    return [(e, (s - lo) / (hi - lo)) for e, s in pairs]
+RRF_K = 60  # standard RRF constant (dampens rank differences)
 
 
 class HybridRetriever:
@@ -37,12 +30,14 @@ class HybridRetriever:
         *,
         weights: dict[str, float] | None = None,
         reranker: Reranker | None = None,
+        rrf_k: float = RRF_K,
     ):
         self.keyword = keyword
         self.text_embedding = text_embedding
         self.visual_embedding = visual_embedding
         self.weights = weights or {"keyword": 1.0, "text": 1.0, "visual": 1.0}
         self.reranker = reranker
+        self.rrf_k = rrf_k
 
     def retrieve(self, query: str, k: int = 8, per_retriever: int = 10) -> list[Evidence]:
         sources = {
@@ -53,20 +48,27 @@ class HybridRetriever:
         merged: dict[tuple[str, int], Evidence] = {}
         agg: dict[tuple[str, int], float] = {}
         for name, pairs in sources.items():
-            for ev, score in _normalize(pairs):
-                weight = self.weights.get(name, 1.0)
-                agg[ev.key] = agg.get(ev.key, 0.0) + weight * score
-                if ev.key not in merged:
-                    merged[ev.key] = ev
+            # a page may yield several chunks; a retriever contributes that
+            # page ONCE, at its best rank (otherwise long pages double-count)
+            best_rank: dict[tuple[str, int], int] = {}
+            best_pairs: dict[tuple[str, int], tuple[Evidence, float]] = {}
+            for rank, (ev, score) in enumerate(pairs):
+                if ev.key not in best_rank:
+                    best_rank[ev.key] = rank
+                    best_pairs[ev.key] = (ev, score)
+            for key, rank in best_rank.items():
+                ev, score = best_pairs[key]
+                contribution = self.weights.get(name, 1.0) / (self.rrf_k + rank + 1)
+                agg[key] = agg.get(key, 0.0) + contribution
+                if key not in merged:
+                    merged[key] = ev
                 else:
                     # merge provenance: visual hit adds the image to the text hit
-                    if ev.image_path and not merged[ev.key].image_path:
-                        merged[ev.key].image_path = ev.image_path
-                    if ev.text and not merged[ev.key].text:
-                        merged[ev.key].text = ev.text
-                merged[ev.key].scores[name] = max(
-                    merged[ev.key].scores.get(name, 0.0), score
-                )
+                    if ev.image_path and not merged[key].image_path:
+                        merged[key].image_path = ev.image_path
+                    if ev.text and not merged[key].text:
+                        merged[key].text = ev.text
+                merged[key].scores.setdefault(name, score)
 
         ranked = sorted(merged.values(), key=lambda e: agg[e.key], reverse=True)
 

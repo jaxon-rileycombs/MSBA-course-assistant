@@ -49,15 +49,16 @@ class TextEmbeddingRetriever(_BaseEmbeddingRetriever):
         return [
             (
                 Evidence(
-                    doc_id=m["doc_id"],
-                    document=m["document"],
-                    page=m["page"],
-                    section=m.get("section", ""),
+                    doc_id=meta["doc_id"],
+                    document=meta["document"],
+                    page=meta["page"],
+                    section=meta.get("section", ""),
                     text=doc_text,
+                    image_path=meta.get("image") or None,  # page image via text hit too
                 ),
                 sim,
             )
-            for m, doc_text, sim in self._rows(query, k)
+            for meta, doc_text, sim in self._rows(query, k)
         ]
 
 
@@ -69,14 +70,14 @@ class VisualEmbeddingRetriever(_BaseEmbeddingRetriever):
         return [
             (
                 Evidence(
-                    doc_id=m["doc_id"],
-                    document=m["document"],
-                    page=m["page"],
-                    section=m.get("section", ""),
+                    doc_id=meta["doc_id"],
+                    document=meta["document"],
+                    page=meta["page"],
+                    section=meta.get("section", ""),
                     text=doc_text,
-                    image_path=m.get("image"),
+                    image_path=meta.get("image"),
                 ),
                 sim,
             )
-            for m, doc_text, sim in self._rows(query, k)
+            for meta, doc_text, sim in self._rows(query, k)
         ]

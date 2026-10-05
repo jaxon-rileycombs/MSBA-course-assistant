@@ -15,7 +15,7 @@ from pathlib import Path
 
 import gradio as gr
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from course_assistant.service import ALL_SCOPE, CourseAssistant  # noqa: E402
 
@@ -53,7 +53,8 @@ def build_app(service: CourseAssistant | None = None) -> gr.Blocks:
             quiz_id, view = service.generate_quiz(scope=scope, topic=topic, n=n)
         except RuntimeError as exc:  # e.g., empty material / model failure
             gr.Info(str(exc))
-            return qid_state, [gr.update(visible=False)] * MAX_QUIZ, "", ""
+            empty = [gr.update(visible=False)] * MAX_QUIZ
+            return qid_state, *empty, "", ""
         radios = []
         for i in range(MAX_QUIZ):
             if i < len(view["questions"]):
@@ -62,7 +63,7 @@ def build_app(service: CourseAssistant | None = None) -> gr.Blocks:
                 radios.append(gr.update(visible=True, label=f"{i + 1}. {q['question']}", choices=choices, value=None))
             else:
                 radios.append(gr.update(visible=False))
-        return quiz_id, radios, f"Quiz ready — {len(view['questions'])} questions (solutions hidden).", ""
+        return quiz_id, *radios, f"Quiz ready — {len(view['questions'])} questions (solutions hidden).", ""
 
     def do_submit(qid, *values):
         if not qid:
@@ -129,8 +130,8 @@ def build_app(service: CourseAssistant | None = None) -> gr.Blocks:
                 with gr.Column(scale=3):
                     scope = gr.Dropdown(choices=scope_choices(), value=ALL_SCOPE, label="Material")
                     topic = gr.Textbox(placeholder="Optional topic filter (e.g. 'memory' or 'grading')", label="Topic filter")
-                    question = gr.Textbox(show_label=False, placeholder="Ask something about the course materials…", lines=2)
-                    ask_btn = gr.Button("Ask", variant="primary")
+                    question = gr.Textbox(show_label=False, placeholder="Ask something about the course materials…", lines=2, elem_id="ask_question")
+                    ask_btn = gr.Button("Ask", variant="primary", elem_id="ask_btn")
                     answer_md = gr.Markdown()
                 with gr.Column(scale=2):
                     gr.Markdown("#### Slide images from the retrieved sources")
@@ -141,13 +142,13 @@ def build_app(service: CourseAssistant | None = None) -> gr.Blocks:
                 q_scope = gr.Dropdown(choices=scope_choices(), value=ALL_SCOPE, label="Quiz material")
                 q_topic = gr.Textbox(placeholder="Optional topic filter", label="Topic filter")
                 q_n = gr.Slider(2, MAX_QUIZ, value=5, step=1, label="Number of questions")
-                gen_btn = gr.Button("Generate quiz", variant="primary")
+                gen_btn = gr.Button("Generate quiz", variant="primary", elem_id="gen_btn")
             qid_state = gr.State("")
             quiz_md = gr.Markdown()
             radios = [gr.Radio(visible=False, label=f"Q{i + 1}") for i in range(MAX_QUIZ)]
             with gr.Row():
-                submit_btn = gr.Button("Submit answers", variant="primary")
-                reveal_btn = gr.Button("Show solutions")
+                submit_btn = gr.Button("Submit answers", variant="primary", elem_id="submit_btn")
+                reveal_btn = gr.Button("Show solutions", elem_id="reveal_btn")
             feedback_md = gr.Markdown()
 
         with gr.Tab("Materials"):

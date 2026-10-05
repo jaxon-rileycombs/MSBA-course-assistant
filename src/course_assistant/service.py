@@ -69,6 +69,11 @@ class CourseAssistant:
                 KeywordRetriever.from_index(index),
                 TextEmbeddingRetriever(index, emb.embed_query),
                 VisualEmbeddingRetriever(index, emb.embed_query),
+                # Offline mode = keyword retrieval only (documented decision):
+                # the stand-in hash embeddings are lexical noise, so text and
+                # visual retrievers are weighted 0 until real embeddings exist.
+                # Online mode enables them (weights 1/1/1) plus reranking.
+                weights={"keyword": 1.0, "text": 0.0, "visual": 0.0},
             )
             return (
                 index,

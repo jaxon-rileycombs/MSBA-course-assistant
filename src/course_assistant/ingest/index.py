@@ -52,26 +52,31 @@ class IndexStore:
         Returns counts {"text": n, "visual": n}. Idempotent: same chunk IDs
         are overwritten, never duplicated.
         """
-        text_count = 0
-        if chunks:
-            ids = [c.chunk_id for c in chunks]
-            embeddings = self.text_embedder([c.text for c in chunks])
-            metadatas = [
+        text_ids: list[str] = []
+        text_embeddings: list[list[float]] = []
+        text_documents: list[str] = []
+        text_metadatas: list[dict] = []
+        for c in chunks:
+            text_ids.append(c.chunk_id)
+            text_documents.append(c.text)
+            page = doc.pages[c.page - 1]
+            text_metadatas.append(
                 {
                     "doc_id": c.doc_id,
                     "document": c.document,
                     "page": c.page,
                     "section": c.section,
+                    "image": page.image_paths[0] if page.image_paths else "",
                 }
-                for c in chunks
-            ]
-            self.text_col.upsert(
-                ids=ids,
-                embeddings=embeddings,
-                documents=[c.text for c in chunks],
-                metadatas=metadatas,
             )
-            text_count = len(ids)
+        if text_ids:
+            text_embeddings = self.text_embedder(text_documents)
+            self.text_col.upsert(
+                ids=text_ids,
+                embeddings=text_embeddings,
+                documents=text_documents,
+                metadatas=text_metadatas,
+            )
 
         visual_ids: list[str] = []
         visual_embeddings: list[list[float]] = []
@@ -100,7 +105,7 @@ class IndexStore:
                 documents=visual_documents,
                 metadatas=visual_metadatas,
             )
-        return {"text": text_count, "visual": len(visual_ids)}
+        return {"text": len(text_ids), "visual": len(visual_ids)}
 
     def remove_document(self, doc_id: str) -> dict:
         """Delete every vector belonging to the document, from BOTH collections."""
