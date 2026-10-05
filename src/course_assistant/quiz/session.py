@@ -4,12 +4,14 @@ Requirement: solutions stay hidden until the student answers or requests
 them, and scores must match the answer key. The key is stored at generation
 time and never regenerated; ``get()`` omits it; ``submit()`` grades; only
 ``reveal()`` returns explanations with their sources.
+
+All lookups take an explicit ``quiz_id`` (the store keeps many quizzes).
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
@@ -25,32 +27,32 @@ class Result:
 
 
 class QuizSession:
-    def __init__(self, store_dir: str | Path, quiz_id: str = ""):
+    def __init__(self, store_dir: str | Path):
         self.store_dir = Path(store_dir)
         self.store_dir.mkdir(parents=True, exist_ok=True)
-        self.quiz_id = quiz_id or uuid4().hex[:12]
 
-    @property
-    def path(self) -> Path:
-        return self.store_dir / f"{self.quiz_id}.json"
+    def _path(self, quiz_id: str) -> Path:
+        return self.store_dir / f"{quiz_id}.json"
 
-    def create(self, title: str, questions: list[Question]) -> str:
+    def create(self, title: str, questions: list[Question], quiz_id: str = "") -> str:
         if not questions:
             raise ValueError("cannot create an empty quiz")
+        quiz_id = quiz_id or uuid4().hex[:12]
         doc = {
-            "quiz_id": self.quiz_id,
+            "quiz_id": quiz_id,
             "title": title,
-            "questions": [asdict(q) for q in questions],  # includes the key (server-side)
+            "questions": [_q_to_dict(q) for q in questions],  # includes the fixed key
             "revealed": False,
         }
-        self.path.write_text(json.dumps(doc, indent=2))
-        return self.quiz_id
+        self._path(quiz_id).write_text(json.dumps(doc, indent=2))
+        return quiz_id
 
-    def get(self, include_solutions: bool = False) -> dict:
+    def get(self, quiz_id: str, include_solutions: bool = False) -> dict:
         """Student view hides answer_index/explanation unless revealed."""
-        if not self.path.exists():
-            raise KeyError(f"quiz {self.quiz_id} not found")
-        doc = json.loads(self.path.read_text())
+        path = self._path(quiz_id)
+        if not path.exists():
+            raise KeyError(f"quiz {quiz_id} not found")
+        doc = json.loads(path.read_text())
         questions = []
         for q in doc["questions"]:
             qq = {k: q[k] for k in ("question", "options")}
@@ -61,8 +63,11 @@ class QuizSession:
             questions.append(qq)
         return {"quiz_id": doc["quiz_id"], "title": doc["title"], "questions": questions}
 
-    def submit(self, answers: list[int]) -> Result:
-        doc = json.loads(self.path.read_text())
+    def submit(self, quiz_id: str, answers: list[int]) -> Result:
+        path = self._path(quiz_id)
+        if not path.exists():
+            raise KeyError(f"quiz {quiz_id} not found")
+        doc = json.loads(path.read_text())
         key = [q["answer_index"] for q in doc["questions"]]
         if len(answers) != len(key):
             raise ValueError(f"expected {len(key)} answers, got {len(answers)}")
@@ -79,13 +84,13 @@ class QuizSession:
         ]
         return Result(score=sum(correct), total=len(key), correct=correct, feedback=feedback)
 
-    def reveal(self) -> dict:
-        """Unlock solutions + explanations (requested answers path)."""
-        if self.path.exists():
-            doc = json.loads(self.path.read_text())
-            doc["revealed"] = True
-            self.path.write_text(json.dumps(doc, indent=2))
-        return self.get(include_solutions=True)
+    def reveal(self, quiz_id: str) -> dict:
+        """Unlock solutions + explanations (requested-answers path)."""
+        path = self._path(quiz_id)
+        doc = json.loads(path.read_text())
+        doc["revealed"] = True
+        path.write_text(json.dumps(doc, indent=2))
+        return self.get(quiz_id, include_solutions=True)
 
     def list_all(self) -> list[dict]:
         out = []
@@ -93,3 +98,13 @@ class QuizSession:
             d = json.loads(p.read_text())
             out.append({"quiz_id": d["quiz_id"], "title": d["title"], "n": len(d["questions"])})
         return out
+
+
+def _q_to_dict(q: Question) -> dict:
+    return {
+        "question": q.question,
+        "options": q.options,
+        "answer_index": q.answer_index,
+        "explanation": q.explanation,
+        "sources": q.sources,
+    }

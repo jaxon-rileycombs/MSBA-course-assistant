@@ -32,10 +32,20 @@ def test_from_env_builds_all_five_services():
     assert cfg.parse.model == "dots.mocr"
 
 
-def test_missing_base_url_raises_and_names_the_variable():
+def test_missing_base_url_is_ok_offline_but_require_keys_raises():
+    # Offline mode must boot with no env at all (fresh clone, no .env).
     env = {k: v for k, v in ENV_OK.items() if k != "CLASS_RERANK_BASE_URL"}
-    with pytest.raises(ConfigError, match="CLASS_RERANK_BASE_URL"):
-        Config.from_env(env)
+    cfg = Config.from_env(env)
+    assert cfg.rerank.base_url == ""
+    assert not cfg.keys_present
+    with pytest.raises(ConfigError, match="Multimodal reranking"):
+        cfg.require_keys()
+
+
+def test_no_env_at_all_is_offline():
+    cfg = Config.from_env({})
+    assert all(s.base_url == "" and s.api_key == "" for s in cfg.services)
+    assert not cfg.keys_present
 
 
 def test_empty_api_keys_are_allowed_but_keys_present_is_false():

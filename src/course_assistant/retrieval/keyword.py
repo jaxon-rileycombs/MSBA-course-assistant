@@ -34,6 +34,7 @@ class KeywordRetriever:
                     page=meta["page"],
                     section=meta.get("section", ""),
                     text=doc_text,
+                    image_path=meta.get("image") or None,  # page image rides with the text hit
                 )
             )
         return cls(chunks)
