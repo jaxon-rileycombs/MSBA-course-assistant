@@ -10,6 +10,7 @@ usable end-to-end before the keys arrive.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -176,4 +177,4 @@ def build_app(service: CourseAssistant | None = None) -> gr.Blocks:
 
 if __name__ == "__main__":
     demo = build_app()
-    demo.launch(server_name="127.0.0.1", server_port=7860)
+    demo.launch(server_name="127.0.0.1", server_port=7860, share=os.environ.get("SHARE") == "1")

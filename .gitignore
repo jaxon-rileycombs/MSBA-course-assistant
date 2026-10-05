@@ -32,3 +32,6 @@ venv/
 
 # local-only agent scratch — never committed
 /.hermes/
+
+# Gradio share-tunnel local artifacts
+.gradio/
