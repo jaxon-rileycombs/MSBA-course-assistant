@@ -29,3 +29,6 @@ venv/
 .idea/
 .vscode/
 /data/quizzes/
+
+# local-only agent scratch — never committed
+/.hermes/
