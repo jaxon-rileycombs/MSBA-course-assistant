@@ -4,14 +4,91 @@ A course assistant that answers questions and generates practice quizzes from
 course materials (slides, syllabus, and other files from Canvas).
 
 Built with hybrid RAG: keyword search (BM25) + text embeddings + visual
-embeddings, fused and reranked, with grounded answers and citable evidence.
+embeddings, fused and reranked, with grounded answers and citable evidence
+(document + page/slide + verbatim excerpt + original images).
 
-> **Status: planning.** Implementation plan lives in
-> `.hermes/plans/2026-10-05_105200-assignment2-course-assistant.md`.
-> Task breakdown and ownership live in the GitHub issues.
->
-> Setup, usage screenshots, findings, and limitations will be documented here
-> as the project is built (see issue #8).
+> **Status:** building incrementally against the task list in the GitHub
+> issues. What works today: parsing & chunking, dedupe, retrieval evaluation,
+> config/clients/CI. What is coming: vector indexes (issue #3), hybrid
+> retrieval + rerank (issue #4), grounded answering (issue #5), citations
+> (issue #6), quiz engine (issue #7), UI + final report (issue #8).
+
+---
+
+## Deployment
+
+### 1. Requirements
+
+- **Python 3.11+** (developed and tested on 3.13)
+- Network access to the class services at `dobolyi.com` (ports 9001–9005)
+  and a working set of **API keys** (see step 3)
+- Optional: **LibreOffice** (macOS: `brew install --cask libreoffice`) — only
+  needed to render full slides as images from PPTX via PDF conversion.
+  Manual PDF export of a deck is an acceptable workaround.
+
+### 2. Install
+
+```bash
+git clone https://github.com/jaxon-rileycombs/MSBA-course-assistant.git
+cd MSBA-course-assistant
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+All dependencies are pinned ranges in `requirements.txt` (bm25s,
+langchain-text-splitters, chromadb, gradio, pymupdf, python-pptx,
+python-docx, requests, python-dotenv, pytest).
+
+### 3. Configure API keys (never committed)
+
+The app reads class-service settings from environment variables. Real keys
+live ONLY in a local, gitignored `.env`:
+
+```bash
+cp .env.example .env
+# edit .env — paste the real keys from the team's class-endpoints.txt
+# into the CLASS_*_API_KEY= lines (five services: vision LLM, text embeddings,
+# visual embeddings, rerank, document parsing)
+```
+
+- `.env` is covered by `.gitignore` and CI **fails the build** if `.env` is
+  committed or if a real-looking key string appears in the repository.
+- Committed examples (`.env.example`) contain dummy values only.
+- Keys never appear in app logs, error messages, reprs, the UI, or screenshots
+  (unit-tested).
+
+### 4. Verify the install
+
+```bash
+pytest -m "not integration" -q     # expect: all tests pass (45+)
+python scripts/evaluate.py --save-md   # local retrieval evaluation over materials/
+```
+
+Both run **without** API keys (integration tests that need the live services
+are marked and skipped).
+
+### 5. Ingest materials
+
+Course materials (slides, syllabus, other files from Canvas) go in
+`materials/`. The ingest pipeline (`scripts/ingest.py`, issue #3) parses,
+dedupes by content hash, extracts page/slide images, and indexes text + visual
+embeddings. A document can then be removed — which deletes its searchable
+content everywhere.
+
+```
+materials/
+  MBAX 6418 - Week 2 - LLM Fundamentals v2.pptx
+  MBAX 6418 Syllabus Fall 2026.pdf
+  ...
+```
+
+### 6. Launch the app
+
+`python -m course_assistant.ui` starts the Gradio interface (issue #8) with
+tabs for Materials, Ask, and Quiz. Requires the class services (issued keys).
+
+---
 
 ## Supported formats & conversion
 
@@ -36,6 +113,8 @@ software and is the preferred path. To render full slides as images:
    deck to PDF and **checks that converted page count == slide count**
 3. Manually exporting a deck to PDF before uploading is an acceptable
    workaround.
+
+---
 
 ## Evaluation (answer quality)
 
@@ -73,3 +152,24 @@ class services (LLM + rerank + embeddings) — blocked on the team's API keys.
 Once available: `python scripts/evaluate.py --with-answers` extends this
 report with per-question answers, source-support checks, and timings
 (README "tested vs. unchecked" will be updated with what ran).
+
+---
+
+## Repository layout
+
+```
+src/course_assistant/
+  config.py          env config; redacted reprs; require_keys() guard
+  clients.py         typed clients for the 5 class services (retries, sanitized errors)
+  ingest/            parsing (formats.py), chunking, registry, LibreOffice convert
+  eval/              question set + evaluation harness
+scripts/             evaluate.py (repeatable comparisons; results/ saved)
+tests/               pytest: unit + env-gated integration
+materials/           course files (gitignored — Canvas downloads)
+```
+
+## Security rules (assignment requirement)
+
+- Keys only in server-side env vars / a local `.env`; never in the UI,
+  browser code, logs, errors, screenshots, docs, tests, or GitHub.
+- `.env.example` carries dummy values; CI scans for leaked key material.

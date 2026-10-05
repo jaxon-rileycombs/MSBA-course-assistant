@@ -122,6 +122,17 @@ Each issue below has completion checks; the team picks ownership. Branch
    user answers or requests them; scores match the answer key; explanations
    are useful and their cited sources support the correct answer — as
    automated tests AND a documented manual walkthrough. *(issue 7)*
+   **Requirement 4 (test the app thoroughly):** unit tests + end-to-end tests
+   (complete workflows) + manual runs across: add/remove files, text and
+   image Q&A, quiz generation/scoring; edge cases: missing information,
+   repeated uploads, unavailable model services (graceful degradation);
+   fix problems found and re-run the affected tests. Light AND dark mode
+   (Gradio) checked for readability of text, controls, and source images.
+   **Requirement 6 (deploy & test independently):** submission includes code,
+   dependencies, and clear install/configure/launch instructions; list extra
+   software (LibreOffice) and how to supply API keys without committing them;
+   validate the docs from a FRESH repository copy (teammate simulation) and
+   fix any missing steps discovered. *(issue 8)*
 8. **UI + evaluation + README** — Gradio tabs; the one design-choice
    comparison; README (setup, screenshots, findings, limitations, tested-vs-
    unchecked, glossary); security pass. *(issue 8)*
