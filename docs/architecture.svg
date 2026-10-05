@@ -18,12 +18,12 @@
     <text x="70" y="103">9001 Vision LLM · Qwen3.6-35B</text>
     <rect x="280" y="82" width="205" height="34" rx="8" fill="#eaf2ff" stroke="#2d7ff9"/>
     <text x="290" y="103">9002 Text embeddings · Nemotron-1B</text>
-    <rect x="500" y="82" width="225" height="34" rx="8" fill="#eaf2ff" stroke="#2d7ff9"/>
-    <text x="510" y="103">9003 Visual embeddings · Qwen3-VL-Embed-2B</text>
-    <rect x="740" y="82" width="225" height="34" rx="8" fill="#eaf2ff" stroke="#2d7ff9"/>
-    <text x="750" y="103">9004 Multimodal rerank · Qwen3-VL-Rerank-2B</text>
-    <rect x="980" y="82" width="200" height="34" rx="8" fill="#eaf2ff" stroke="#2d7ff9"/>
-    <text x="990" y="103">9005 Parsing · dots.mocr</text>
+    <rect x="500" y="82" width="250" height="34" rx="8" fill="#eaf2ff" stroke="#2d7ff9"/>
+    <text x="510" y="103">9003 Visual embeddings · Qwen3-VL-Embed</text>
+    <rect x="765" y="82" width="250" height="34" rx="8" fill="#eaf2ff" stroke="#2d7ff9"/>
+    <text x="775" y="103">9004 Multimodal rerank · Qwen3-VL-Reranker</text>
+    <rect x="1030" y="82" width="170" height="34" rx="8" fill="#eaf2ff" stroke="#2d7ff9"/>
+    <text x="1040" y="103">9005 Parsing · dots.mocr</text>
   </g>
 
   <!-- ============ UI LAYER ============ -->
@@ -103,34 +103,33 @@
 
   <!-- ============ ANSWER GENERATION ============ -->
   <text x="60" y="700" font-size="13" font-weight="600" fill="#5c7186">ANSWER &amp; QUIZ GENERATION</text>
-  <rect x="60" y="710" width="350" height="64" rx="10" fill="#eaf2ff" stroke="#2d7ff9"/>
+  <rect x="60" y="710" width="350" height="80" rx="10" fill="#eaf2ff" stroke="#2d7ff9"/>
   <text x="76" y="734" font-size="12.5" font-weight="600" fill="#243348">Vision LLM (9001) — grounded prompt</text>
   <text x="76" y="752" font-size="11.5" fill="#5c7186">answer only from evidence; diagrams described from images</text>
 
   <line x1="410" y1="742" x2="446" y2="742" stroke="#5c7186" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <rect x="450" y="710" width="240" height="64" rx="10" fill="#f4f7fb" stroke="#8496ab"/>
+  <rect x="450" y="710" width="240" height="80" rx="10" fill="#f4f7fb" stroke="#8496ab"/>
   <text x="466" y="734" font-size="12.5" font-weight="600" fill="#243348">Structured output + validate</text>
   <text x="466" y="752" font-size="11.5" fill="#5c7186">{answer, sources[]} · schema + source-support check</text>
   <text x="466" y="768" font-size="11.5" fill="#5c7186">missing info → acknowledged, never invented</text>
 
   <line x1="690" y1="742" x2="726" y2="742" stroke="#5c7186" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <rect x="730" y="710" width="330" height="64" rx="10" fill="#f4f7fb" stroke="#8496ab"/>
+  <rect x="730" y="710" width="330" height="80" rx="10" fill="#f4f7fb" stroke="#8496ab"/>
   <text x="746" y="734" font-size="12.5" font-weight="600" fill="#243348">Citations renderer</text>
   <text x="746" y="752" font-size="11.5" fill="#5c7186">doc name + page/slide + section · verbatim excerpt</text>
   <text x="746" y="768" font-size="11.5" fill="#5c7186">original slide image shown as visual evidence</text>
 
-  <rect x="1100" y="710" width="110" height="64" rx="10" fill="#eaf2ff" stroke="#2d7ff9"/>
+  <rect x="1100" y="710" width="110" height="80" rx="10" fill="#eaf2ff" stroke="#2d7ff9"/>
   <text x="1112" y="734" font-size="12" font-weight="600" fill="#243348">Quiz (9001)</text>
   <text x="1112" y="752" font-size="10.5" fill="#5c7186">MCQ from chunks</text>
-  <text x="1112" y="768" font-size="10.5" fill="#5c7186">fixed key · score</text>
+  <text x="1112" y="770" font-size="10.5" fill="#5c7186">fixed key · score</text>
 
   <!-- arrows up to UI -->
-  <line x1="318" y1="774" x2="318" y2="232" stroke="#5c7186" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="318" y1="790" x2="318" y2="232" stroke="#5c7186" stroke-width="1.5" marker-end="url(#arrow)"/>
   <text x="252" y="520" font-size="11" fill="#5c7186" transform="rotate(-90 252 520)">answer + sources + images</text>
-  <line x1="1155" y1="774" x2="1155" y2="232" stroke="#5c7186" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="1155" y1="790" x2="1155" y2="232" stroke="#5c7186" stroke-width="1.5" marker-end="url(#arrow)"/>
   <text x="1180" y="505" font-size="11" fill="#5c7186" transform="rotate(90 1180 505)">quiz feedback + explanations</text>
 
   <!-- retrieval -> answer -->
   <line x1="1155" y1="634" x2="318" y2="710" stroke="#5c7186" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
-  <text x="700" y="662" font-size="11" fill="#5c7186">evidence bundle (chunks + images)</text>
-</svg>
+  <text x="700" y="662" font-size="11" fill="#5c7186">evidence bundle (chunks + images)</text></svg>
