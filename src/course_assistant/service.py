@@ -170,7 +170,11 @@ class CourseAssistant:
         return [e for e in evidence if e.document == scope]
 
     def _scope_chunks(self, scope: str, n: int) -> list[Evidence]:
-        """Sample up to n evidence chunks across the selected document(s)."""
+        """Sample up to n evidence chunks spread across the selected
+        document(s): each document contributes a share proportional to its
+        size, and picks within a document are evenly spaced across its whole
+        length — so a quiz about a deck never covers only its opening slides.
+        """
         res = self._index.text_col.get(limit=2000)
         documents = res.get("documents") or []
         metadatas = res.get("metadatas") or []
@@ -191,13 +195,32 @@ class CourseAssistant:
                     text=text,
                 )
             )
+        items = [(doc_id, chunks) for doc_id, chunks in by_doc.items() if chunks]
+        total = sum(len(v) for _, v in items)
+        if not total:
+            return []
+
+        def _spread(chunks: list[Evidence], k: int) -> list[Evidence]:
+            if k >= len(chunks):
+                return list(chunks)  # small doc: take everything
+            step = len(chunks) / k
+            return [chunks[int(j * step)] for j in range(k)]
+
+        # per-doc share proportional to size, at least 1 each
+        shares = {doc_id: max(1, round(n * len(chunks) / total)) for doc_id, chunks in items}
+        pool = {doc_id: _spread(chunks, shares[doc_id]) for doc_id, chunks in items}
         out: list[Evidence] = []
-        doc_items = list(by_doc.items())
-        total = sum(len(v) for _, v in doc_items)
-        for i in range(min(n, total)):
-            chunks = doc_items[i % len(doc_items)][1]
-            if chunks:
-                out.append(chunks.pop(0))
+        while len(out) < n:
+            progressed = False
+            for doc_id, picked in list(pool.items()):
+                if not picked:
+                    continue
+                out.append(picked.pop(0))
+                progressed = True
+                if len(out) >= n:
+                    break
+            if not progressed:
+                break
         return out
 
     # -- ask ---------------------------------------------------------------
@@ -225,7 +248,7 @@ class CourseAssistant:
             filtered = [c for c in chunks if topic.lower() in c.text.lower()]
             if filtered:
                 chunks = filtered
-        questions = self.quizgen.generate(chunks[: n * 2])
+        questions = self.quizgen.generate(chunks[: n * 2], n=n)
         quiz_id = self.sessions.create(title or "Generated quiz", questions)
         return quiz_id, self.sessions.get(quiz_id)
 

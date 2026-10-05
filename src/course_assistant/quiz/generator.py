@@ -79,37 +79,49 @@ class QuizGenerator:
         self.n = n
         self.max_tokens = max_tokens
 
-    def generate(self, chunks: list[Evidence]) -> list[Question]:
-        """``chunks`` = evidence sampled across the selected material."""
-        if not chunks:
+    def generate(self, chunks: list[Evidence], n: int | None = None) -> list[Question]:
+        """``chunks`` = evidence sampled across the selected material.
+
+        Returns EXACTLY the requested number of questions when the model
+        cooperates (never more): one call at temperature 0, then a second
+        attempt at 0.2 if the first came back short, then a clear error
+        rather than an under-filled quiz.
+        """
+        want = min(n or self.n, len(chunks))
+        if not chunks or want < 1:
             return []
         allowed = {(e.document, e.page) for e in chunks}
         evidence_txt = "\n".join(
             f"{i}. [{e.document} | slide {e.page}" + (f" | {e.section}" if e.section else "") + f"] {e.text[:500]}"
-            for i, e in enumerate(chunks[: self.n], 1)
+            for i, e in enumerate(chunks[:want], 1)
         )
-        prompt = QUIZ_PROMPT.format(n=min(self.n, len(chunks)), evidence=evidence_txt)
-        raw = self.client.chat(
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            max_tokens=self.max_tokens,
-            json_mode=True,
-        )
-        extracted = _extract_questions(parse_json_payload(raw))
-        questions = validate_questions(extracted if extracted is not None else [], allowed)
-        if len(questions) < min(2, self.n):
-            raise RuntimeError(
-                "The model did not return enough valid grounded questions."
+        questions: list[Question] = []
+        for attempt in range(2):
+            prompt = QUIZ_PROMPT.format(n=want, evidence=evidence_txt)
+            raw = self.client.chat(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0 if attempt == 0 else 0.2,
+                max_tokens=self.max_tokens,
+                json_mode=True,
             )
-        return questions
+            extracted = _extract_questions(parse_json_payload(raw))
+            questions = validate_questions(extracted if extracted is not None else [], allowed)
+            if len(questions) >= want:
+                break
+        if len(questions) < min(2, want):
+            raise RuntimeError(
+                f"Could not generate {want} valid grounded questions from this material — please try again."
+            )
+        return questions[:want]  # exact count, never more
 
 
 class OfflineQuizGenerator:
     """Deterministic placeholder quiz (demo/tests only) — no model."""
 
-    def generate(self, chunks: list[Evidence]) -> list[Question]:
+    def generate(self, chunks: list[Evidence], n: int | None = None) -> list[Question]:
+        want = min(n or 5, len(chunks))
         questions = []
-        for e in chunks[:5]:
+        for e in chunks[:want]:
             options = [e.section or e.document, "The syllabus", "A random topic", "None of the above"]
             questions.append(
                 Question(

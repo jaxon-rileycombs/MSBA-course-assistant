@@ -32,7 +32,7 @@ class FakeLLM(VisionLLMClient):
 
     def chat(self, messages, **kwargs):
         self.calls += 1
-        return self.responses.pop(0)
+        return self.responses.pop(0) if self.responses else "{}"
 
 
 GOOD_Q = {
@@ -72,6 +72,37 @@ def test_generator_raises_when_not_enough_valid():
     llm = FakeLLM(['{"quiz": []}'])
     with pytest.raises(RuntimeError):
         QuizGenerator(llm).generate(EVIDENCE)
+
+
+def test_generator_honors_requested_count():
+    payload = {"quiz": [GOOD_Q, {**GOOD_Q, "question": "Second?"}, {**GOOD_Q, "question": "Third?"}]}
+    llm = FakeLLM([json.dumps(payload)])
+    qs = QuizGenerator(llm, n=5).generate(EVIDENCE, n=3)
+    assert llm.calls == 1 and len(qs) == 3  # slider value wins, never more
+
+
+def test_generator_retries_once_when_short():
+    short = json.dumps({"quiz": [GOOD_Q]})
+    full = json.dumps({"quiz": [GOOD_Q, {**GOOD_Q, "question": "Second?"}, {**GOOD_Q, "question": "Third?"}]})
+    llm = FakeLLM([short, full])
+    qs = QuizGenerator(llm, n=3).generate(EVIDENCE)
+    assert llm.calls == 2 and len(qs) == 3  # second attempt filled the count
+
+
+def test_generator_exact_count_never_more():
+    enough_evidence = EVIDENCE + [
+        Evidence(doc_id="d1", document="Week 2.pptx", page=35, section="More",
+                 text="Extra evidence entry for a longer deck."),
+        Evidence(doc_id="d1", document="Week 2.pptx", page=36, section="More",
+                 text="Another evidence entry, still on the same deck."),
+        Evidence(doc_id="d1", document="Week 2.pptx", page=37, section="More",
+                 text="A third extra entry so there is more evidence than questions."),
+    ]
+    payload = {"quiz": [GOOD_Q, {**GOOD_Q, "question": "B?"}, {**GOOD_Q, "question": "C?"},
+                        {**GOOD_Q, "question": "D?"}, {**GOOD_Q, "question": "E?"}]}
+    llm = FakeLLM([json.dumps(payload)])
+    qs = QuizGenerator(llm, n=5).generate(enough_evidence, n=4)
+    assert len(qs) == 4 and llm.calls == 1  # model sent 5 — we keep exactly 4
 
 
 def test_session_hides_solutions_until_reveal(tmp_path):

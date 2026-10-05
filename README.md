@@ -9,7 +9,7 @@ original slide image.
 
 ## Try the app
 
-▶ **Live demo:** https://4aeaf0043bb714d68c.gradio.live
+▶ **Live demo:** https://64fc2269f77278036d.gradio.live
 *(temporary share link — up to ~1 week; recreate with `SHARE=1 python app.py`)*
 
 Run it locally in one command after installing (see [Running the app](#running-the-app)):
@@ -183,7 +183,7 @@ recommendation. Full rows: `results/eval_live.json` / `results/eval_live.md`.
 
 ## Testing and verification
 
-- **97 pytest tests** (`pytest -q`), all runnable without keys: parsing,
+- **102 pytest tests** (`pytest -q`), all runnable without keys: parsing,
   chunking, dedupe, removal cascade, retrieval + fusion + rerank wiring,
   structured-answer validation (bad JSON, un-retrieved citations dropped,
   missing-information handling), quiz validation with hidden solutions and
@@ -246,6 +246,6 @@ scripts/
   ingest.py              material management CLI (ingest/list/remove)
   evaluate.py            retrieval + answer-quality evaluation (results/ saved)
 docs/                    architecture diagram + screenshots
-tests/                   pytest suite (97 tests)
+tests/                   pytest suite (102 tests)
 materials/               course files (gitignored — Canvas downloads)
 ```

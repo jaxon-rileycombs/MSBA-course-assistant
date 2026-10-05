@@ -140,3 +140,40 @@ def test_ask_on_empty_index_acknowledges_missing_information(tmp_path):
     assert answer.missing_info
     assert answer.sources == []
     assert "could not" in answer.answer.lower() or "not" in answer.answer.lower()
+
+
+def test_quiz_requested_count_is_honored_end_to_end(tmp_path):
+    deck = make_pptx(tmp_path / "Week 2.pptx", slides=10)
+    svc = CourseAssistant(
+        dirs=ServiceDirs(
+            vector_dir=str(tmp_path / "vec"),
+            images_root=str(tmp_path / "imgs"),
+            registry_path=str(tmp_path / "reg.json"),
+            quiz_dir=str(tmp_path / "quizzes"),
+        ),
+        force_offline=True,
+    )
+    svc.add_documents([str(deck)])
+    quiz_id, view = svc.generate_quiz(scope="Week 2.pptx", n=3)
+    assert len(view["questions"]) == 3  # the slider's value, exactly
+    result = svc.grade_quiz(quiz_id, [0, 0, 0])
+    assert result["total"] == 3
+
+
+def test_quiz_sampling_spreads_across_the_whole_deck(tmp_path):
+    deck = make_pptx(tmp_path / "Week 2.pptx", slides=12)
+    svc = CourseAssistant(
+        dirs=ServiceDirs(
+            vector_dir=str(tmp_path / "vec"),
+            images_root=str(tmp_path / "imgs"),
+            registry_path=str(tmp_path / "reg.json"),
+            quiz_dir=str(tmp_path / "quizzes"),
+        ),
+        force_offline=True,
+    )
+    svc.add_documents([str(deck)])
+    sampled = svc._scope_chunks("Week 2.pptx", 3)
+    pages = sorted(e.page for e in sampled)
+    assert len(pages) == 3  # one sample unit per slide
+    assert pages[0] == 1 and pages[-1] >= 9  # covers early AND late slides
+
