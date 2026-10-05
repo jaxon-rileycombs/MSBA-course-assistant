@@ -152,10 +152,41 @@ class EmbeddingsClient(_BaseClient):
         if not inputs:
             return []
         data = self._post({"model": self._svc.model, "input": inputs})
+        return self._vectors(data)
+
+    def embed_images(self, image_paths: list[str]) -> list[list[float]]:
+        """Embed image files (9003 Qwen3-VL-Embedding) via base64 data URLs.
+
+        Qwen3-VL-Embedding is a multimodal model: one space for text and
+        images, so queries use :meth:`embed` and pages use this. The content
+        part shape (OpenAI-style image_url) is the documented vLLM
+        multimodal format; confirm against the service's /docs on first use
+        with the team's keys.
+        """
+        import base64
+        import mimetypes
+        from pathlib import Path
+
+        if not image_paths:
+            return []
+        content = []
+        for p in image_paths:
+            b64 = base64.b64encode(Path(p).read_bytes()).decode("ascii")
+            mime = mimetypes.guess_type(p)[0] or "image/png"
+            content.append(
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
+            )
+        data = self._post({"model": self._svc.model, "input": content})
+        return self._vectors(data)
+
+    @staticmethod
+    def _vectors(data: dict) -> list[list[float]]:
         try:
             return [item["embedding"] for item in data["data"]]
         except (KeyError, TypeError) as exc:
-            raise ClassAPIError(self._svc.name, None, f"unexpected embedding response shape: {exc}") from exc
+            raise ClassAPIError(
+                data.get("model", "embedding"), None, f"unexpected embedding response shape: {exc}"
+            ) from exc
 
 
 class RerankClient(_BaseClient):
