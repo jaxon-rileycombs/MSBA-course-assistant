@@ -67,39 +67,38 @@ class Config:
 
     @property
     def keys_present(self) -> bool:
-        """True when every service has a non-empty API key (integration-ready)."""
-        return all(s.api_key for s in self.services)
+        """True when every service has a base URL and a non-empty API key
+        (integration-ready). Offline mode needs neither."""
+        return all(s.base_url and s.api_key for s in self.services)
 
     def require_keys(self) -> "Config":
-        """Raise :class:`ConfigError` when any service lacks an API key.
+        """Raise :class:`ConfigError` when any service lacks a base URL or an
+        API key.
 
         Entry points that talk to class services call this so the app fails
         with a clear, key-free message instead of a 401 deep in a request.
         """
-        missing = [s.name for s in self.services if not s.api_key]
+        missing = [
+            s.name
+            for s in self.services
+            if not (s.base_url and s.api_key)
+        ]
         if missing:
             raise ConfigError(
                 "Class services are not configured for: " + ", ".join(missing)
-                + ". Add the real API keys to your local .env (see .env.example)."
+                + ". Add the real base URLs and API keys to your local .env"
+                " (see .env.example)."
             )
         return self
 
     @classmethod
     def from_env(cls, env: Optional[Mapping[str, str]] = None) -> "Config":
         env = dict(os.environ if env is None else env)
-        missing = sorted(
-            f"{prefix}_BASE_URL" for prefix, _, _ in _SERVICES if not env.get(f"{prefix}_BASE_URL")
-        )
-        if missing:
-            raise ConfigError(
-                "Missing class-service configuration: " + ", ".join(missing)
-                + ". Copy .env.example to .env and fill in the values (see README)."
-            )
         kwargs: dict[str, ServiceConfig] = {}
         for prefix, attr, name in _SERVICES:
             kwargs[attr] = ServiceConfig(
                 name=name,
-                base_url=env[f"{prefix}_BASE_URL"].rstrip("/"),
+                base_url=(env.get(f"{prefix}_BASE_URL") or "").rstrip("/"),
                 api_key=env.get(f"{prefix}_API_KEY", ""),
                 model=env.get(f"{prefix}_MODEL", ""),
             )

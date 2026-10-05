@@ -182,3 +182,35 @@ is part of issue 1.
   do not use outside campus without review.
 - Materials in place (7 files): syllabus PDF, Weeks 2–6 slide decks, Local
   Inference deck — golden corpus for reproducible tests.
+
+---
+
+## Status at handoff (all buildable work is done)
+
+**Built & tested — 91/91 pytest passing (default suite, no keys):**
+- Issues #3 (ChromaDB index: separate text/visual collections, sha256 dedupe,
+  remove cascade), #4 (keyword + text + visual retrieval, RRF fusion, rerank
+  adapter), #5 (grounded answering, structured output validation,
+  missing-information handling), #7 (quiz engine: validated generation, fixed
+  server-side keys, hidden solutions), #6 + #8 (Gradio app: Ask / Quiz /
+  Materials, online/offline auto-detect, elem_ids, light & dark verified).
+- PRs #9–#15 open, one per issue, each with a plain-language body.
+  All issues #1–#8 labeled (`foundation`, `ingestion`, per-area labels,
+  `blocked-on-keys`) for student readability; README carries a glossary.
+- README rewritten as the final report: deployment guide, architecture
+  (docs/architecture.svg), evaluation (chunking comparison: recursive
+  1200/150 for text, page-unit for visual; meme → slide 33 pos 1),
+  screenshots (light + dark ask, quiz feedback with sources, materials),
+  tested-vs-unchecked, findings (incl. RRF double-count fix, keyword-image
+  metadata, offline-embedding noise), security rules.
+
+**Key decisions:** RRF over score fusion (scale-immune); offline mode =
+keyword retrieval only (stand-in embeddings are lexical noise; real embeddings
++ rerank activate online); text metadata carries the page image so every hit
+can show its slide; recursive text chunks + page-unit visual chunks.
+
+**Blocked on team keys (cannot be done from here):** real semantic retrieval
+& rerank, live LLM answers/quizzes, answer-quality evaluation, real-model
+screenshots. Team must also: review/merge PRs #9–#15, grant the instructor
+access to the private repo, submit the link on Canvas, and run the fresh-clone
+deployment steps in the README.
