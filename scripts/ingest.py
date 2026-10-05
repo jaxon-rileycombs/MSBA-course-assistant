@@ -40,10 +40,27 @@ DEFAULTS = {
 
 
 def build_index(args) -> IndexStore:
+    text_embedder = HashEmbedder().embed_texts
+    image_embedder = HashEmbedder().embed_images
+    if getattr(args, "real_embeddings", False):
+        from course_assistant.clients import EmbeddingsClient
+        from course_assistant.config import load_config
+        from course_assistant.retrieval.embeddings_service import (
+            TextEmbedderAdapter,
+            VisualEmbedderAdapter,
+        )
+
+        cfg = load_config()
+        if cfg.keys_present:
+            text_embedder = TextEmbedderAdapter(EmbeddingsClient(cfg.text_embed)).embed_texts
+            image_embedder = VisualEmbedderAdapter(EmbeddingsClient(cfg.visual_embed)).embed_images
+            print("embeddings: class services (9002/9003)")
+        else:
+            print("  ! --real-embeddings given but no API keys in .env — using local stand-in embeddings")
     return IndexStore(
         args.vector_dir,
-        text_embedder=HashEmbedder().embed_texts,
-        image_embedder=HashEmbedder().embed_images,
+        text_embedder=text_embedder,
+        image_embedder=image_embedder,
     )
 
 

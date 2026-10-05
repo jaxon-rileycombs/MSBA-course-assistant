@@ -17,6 +17,7 @@ sanitized so that any occurrence of the key is replaced with ``***``.
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any, Optional
 
 import requests
@@ -63,7 +64,13 @@ class _BaseClient:
 
     @property
     def url(self) -> str:
-        return self._svc.base_url + self.path
+        base = self._svc.base_url.rstrip("/")
+        # Some services document BASE_URL with a trailing /v1 and ALSO expect
+        # the path to carry /v1 (e.g. http://host:9003/v1 + /v1/embeddings).
+        # Deduplicate so we never post to /v1/v1/... (404).
+        if base.endswith("/v1") and self.path.startswith("/v1"):
+            base = base[:-3]
+        return base + self.path
 
     def _headers(self) -> dict:
         headers = {"Content-Type": "application/json"}
@@ -119,23 +126,36 @@ class VisionLLMClient(_BaseClient):
         messages: list[dict],
         *,
         temperature: float = 0.0,
-        max_tokens: int = 1024,
+        max_tokens: int = 2048,
         json_mode: bool = False,
     ) -> str:
-        """Single-turn chat; ``messages`` may mix text_part/image_part content."""
+        """Single-turn chat; ``messages`` may mix text_part/image_part content.
+
+        The served model is a reasoning model (Qwen3.6-35B): thinking goes to
+        ``message.reasoning`` and small budgets leave ``content`` null. We
+        disable thinking via the vLLM chat-template knob so answers arrive
+        deterministic and fast (verified live against 9001).
+        """
         payload: dict[str, Any] = {
             "model": self._svc.model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
+            "chat_template_kwargs": {"enable_thinking": False},
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
         data = self._post(payload)
         try:
-            return data["choices"][0]["message"]["content"]
+            content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
             raise ClassAPIError(self._svc.name, None, f"unexpected chat response shape: {exc}") from exc
+        if not content:  # null/empty even after retries — never fabricate
+            raise ClassAPIError(
+                self._svc.name, None,
+                "model returned an empty completion (no reasoning visible)",
+            )
+        return content
 
 
 class EmbeddingsClient(_BaseClient):
@@ -157,11 +177,10 @@ class EmbeddingsClient(_BaseClient):
     def embed_images(self, image_paths: list[str]) -> list[list[float]]:
         """Embed image files (9003 Qwen3-VL-Embedding) via base64 data URLs.
 
-        Qwen3-VL-Embedding is a multimodal model: one space for text and
-        images, so queries use :meth:`embed` and pages use this. The content
-        part shape (OpenAI-style image_url) is the documented vLLM
-        multimodal format; confirm against the service's /docs on first use
-        with the team's keys.
+        Qwen3-VL-Embedding mixes text and images in one space, so queries use
+        :meth:`embed` and page/slide images use this. The completion-style
+        ``input`` of base64 data URLs is the documented vLLM multimodal
+        format (confirmed against the live service's /docs).
         """
         import base64
         import mimetypes
@@ -171,13 +190,75 @@ class EmbeddingsClient(_BaseClient):
             return []
         content = []
         for p in image_paths:
-            b64 = base64.b64encode(Path(p).read_bytes()).decode("ascii")
+            b64 = base64.b64encode(self._read_embeddable(p)).decode("ascii")
             mime = mimetypes.guess_type(p)[0] or "image/png"
-            content.append(
-                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
-            )
+            content.append(f"data:{mime};base64,{b64}")
         data = self._post({"model": self._svc.model, "input": content})
         return self._vectors(data)
+
+    @staticmethod
+    def _read_embeddable(path: str) -> bytes:
+        """Return image bytes small enough for the embedding API.
+
+        The service caps input at 8192 tokens, and the bound is effectively
+        IMAGE PATCHES: the vision encoder re-tiles detailed images, so a
+        downscaled photo can fail at ANY resolution (measured: 64px photos
+        still fail — 78/250 images fail at 256px, 35 at 128px). We therefore
+        downscale any image whose longest side exceeds 128px to 128px via
+        PyMuPDF — a good retrieval-quality/size trade-off (86% of the
+        corpus embeds at 128px) — and callers skip images the service still
+        rejects. Originals are never modified and stay full-resolution for
+        display.
+        """
+        path_obj = Path(path)
+        raw = path_obj.read_bytes()
+        px = EmbeddingsClient._longest_side_px(path_obj)
+        known_small = px > 0 and px <= 128
+        too_byte_heavy = len(raw) > 600_000  # base64 would exceed the 1M-char bound
+        if known_small and not too_byte_heavy:
+            return raw
+        try:
+            import fitz  # PyMuPDF
+
+            doc = fitz.open(path)
+            page = doc[0]
+            w, h = page.rect.width, page.rect.height
+            scale = min(1.0, 128.0 / max(w, h))
+            pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale))
+            out = pix.tobytes("png")
+            doc.close()
+            return out
+        except Exception:
+            return raw  # fall back to full size; better one oversize attempt
+
+    @staticmethod
+    def _longest_side_px(path_obj: Path) -> int:
+        """Read width/height from the PNG/JPEG/GIF header without decoding
+        (0 = unknown)."""
+        try:
+            import struct
+
+            head = path_obj.read_bytes()[:4096]
+            if head[:8] == b"\x89PNG\r\n\x1a\n":
+                w, h = struct.unpack(">II", head[16:24])
+                return max(w, h)
+            if head[:3] == b"\xff\xd8\xff":  # JPEG: scan for SOF0/SOF2
+                pos, n = 2, len(head)
+                while pos + 9 < n:
+                    if head[pos] != 0xFF:
+                        pos += 1
+                        continue
+                    marker = head[pos + 1]
+                    if marker in (0xC0, 0xC2):
+                        h, w = struct.unpack(">HH", head[pos + 5 : pos + 9])
+                        return max(w, h)
+                    pos += 2
+            if head[:6] in (b"GIF87a", b"GIF89a"):
+                w, h = struct.unpack("<HH", head[6:10])
+                return max(w, h)
+        except Exception:
+            pass
+        return 0  # unknown -> caller routes through the downscale path
 
     @staticmethod
     def _vectors(data: dict) -> list[list[float]]:

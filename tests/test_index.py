@@ -38,9 +38,42 @@ def test_upsert_indexes_text_and_visual_separately(store):
     assert meta["document"] == "deck.pptx"
     assert meta["page"] == 1
     assert meta["section"] == "Sec A"
-
     vmeta = store.visual_col.get(where={"doc_id": "a" * 64})["metadatas"][0]
     assert vmeta["image"] == "img_a.png"
+
+
+def test_unembeddable_image_is_skipped_not_fatal(tmp_path):
+    from course_assistant.clients import ClassAPIError
+
+    emb = HashEmbedder()
+    reject_img = lambda paths: (_ for _ in ()).throw(
+        ClassAPIError("Visual embeddings", 400, "over token budget")
+    )
+    ok_img = emb.embed_images
+    call_count = {"n": 0}
+
+    def flaky_embed(paths):
+        call_count["n"] += 1
+        if any("reject" in p for p in paths):
+            return reject_img(paths)
+        return ok_img(paths)
+
+    store = IndexStore(tmp_path / "vec", emb.embed_texts, flaky_embed)
+    doc = make_doc(
+        "b" * 64,
+        "mixed.pptx",
+        pages=(
+            ("Text A", "Sec A", ["good_a.png"]),
+            ("Text B", "Sec B", ["reject_b.png"]),
+            ("Text C", "Sec C", ["good_c.png"]),
+        ),
+    )
+    chunks = chunk_document(doc)
+    counts = store.upsert_document(doc, chunks)
+    # text indexed for all pages; the rejected image simply has no vector
+    assert counts["text"] == 3
+    assert counts["visual"] == 2
+    assert call_count["n"] == 3  # all three images were attempted
 
 
 def test_upsert_is_idempotent(store):

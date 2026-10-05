@@ -22,6 +22,7 @@ import chromadb
 from .chunking import Chunk
 from .documents import Document
 from .embeddings import ImageEmbedder, TextEmbedder
+from ..clients import ClassAPIError
 
 
 class IndexStore:
@@ -87,8 +88,14 @@ class IndexStore:
                 continue  # no visual evidence for this page — skip visual index
             image = page.image_paths[0]
             vid = f"{doc.doc_id}:{page.number}"
+            try:
+                visual_embeddings.append(self.image_embedder([image])[0])
+            except ClassAPIError as exc:
+                # a picture the embedding service rejects (e.g. over its
+                # token budget at any resolution) must not block the corpus
+                print(f"  ! skip visual vector {doc.filename} p{page.number}: {exc}", flush=True)
+                continue
             visual_ids.append(vid)
-            visual_embeddings.append(self.image_embedder([image])[0])
             visual_documents.append(f"[{doc.filename} p{page.number}] {page.section}")
             visual_metadatas.append(
                 {

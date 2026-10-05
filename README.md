@@ -9,14 +9,16 @@ answers and citable evidence (document + page/slide + verbatim excerpt +
 original slide images). The class services (vision LLM, embeddings, rerank,
 parsing) run on `dobolyi.com` ports 9001–9005.
 
-> **Status: complete & tested (94 pytest tests).** The app runs end-to-end.
-> With the team's API keys it uses the class services ("online" mode);
-> without keys it automatically drops into a clearly-labelled **offline
-> mode** (keyword retrieval + deterministic stand-ins) so everything is
-> still exercisable. What remains blocked on keys: live semantic retrieval,
-> live model answers/quizzes, and the final answer-quality evaluation.
-> The architecture diagram below matches the finished app; the team verifies
-> it against the repo and explains the findings in their own words.
+> **Status: complete, tested (97 pytest tests), and verified live against the
+> class services (online mode).** The app runs end-to-end on both tracks:
+> with API keys it uses the class services (vision LLM, text + visual
+> embeddings, rerank, parsing); without keys it automatically drops into a
+> clearly-labelled **offline mode** (keyword retrieval + deterministic
+> stand-ins) so everything is still exercisable from a fresh clone. The live
+> pass — real-embedding index, real answers, real quizzes, answer-quality
+> evaluation — is finished and its results are in this report. What remains
+> is team-side: review the merged pull requests, give the instructor access,
+> and submit the link on Canvas.
 
 ---
 
@@ -166,9 +168,9 @@ slide images — is handed to the generative steps with the question.
 
 ## Screenshots
 
-*Captured in offline mode (no class-service keys). Retrieval is real (BM25
-over the actual corpus); the answer/quiz text comes from the deterministic
-offline stand-ins. Online mode uses the real models.*
+*Captured live against the class services (online mode): real hybrid
+retrieval (keyword + 2048-dim text + visual embeddings + rerank) and real
+model answers/quizzes over the actual course corpus.*
 
 **1. Answer displaying a supporting slide image** — the Week 2 "Vibe Coding
 on Prod" meme, cited to slide 33:
@@ -179,8 +181,9 @@ on Prod" meme, cited to slide 33:
 
 ![Answer, dark mode](docs/screenshots/ask-dark.png)
 
-**3. Quiz feedback with sources** — score matches the answer key;
-explanations cite document + slide:
+**3. Quiz — live generated questions; solutions reveal the answer key with
+explanations citing document + slide** (solutions stay hidden until
+answered or revealed):
 
 ![Quiz feedback with sources](docs/screenshots/quiz-light.png)
 
@@ -246,12 +249,29 @@ kept as single chunks.
 index stays page/slide-unit regardless: images belong to a page, so visual
 retrieval keys on the page render, not on text chunk size.
 
-### Answer-quality results (pending)
+### Answer-quality results (live, class services)
 
-Correctness, source support, and end-to-end timing per question require the
-class services (LLM + rerank + embeddings) — blocked on the team's API keys.
-Once available: `python scripts/evaluate.py --with-answers` extends this
-report with per-question answers, source-support checks, and timings.
+Ran `python scripts/evaluate.py --with-answers` against the real services
+(real 2048-dim text + visual embeddings index, rerank, vision LLM). Same 8
+questions. `source hit` = the expected document+page appears among the
+answer's cited sources:
+
+| question | answer (truncated) | source hit | time (s) |
+|---|---|---|---|
+| Q1 syllabus-software | The provided materials do not specify the prerequisite requi… | 1 | 2.79 |
+| Q2 vibe-vs-agentic | Vibe coding is a human-in-the-loop, prompt-based, conversati… | 1 | 1.31 |
+| Q3 meme (visual) | The meme shows the 'One Does Not Simply' template with the t… | 1 | 1.62 |
+| Q4 hardware (visual) | The slide states that video memory (VRAM) and/or system memo… | 1 | 1.99 |
+| Q5 open-closed | Open-weight LLMs are free to download and allow for local or… | 1 | 1.95 |
+| Q6 speculative | Speculative decoding is a method that involves 'guessing' se… | 1 | 1.30 |
+| Q7 serving-debugging | The provided evidence does not contain specific recommendati… | 0 | 1.23 |
+| Q8 unanswerable | The provided materials do not contain information about … | 0 | 0.84 |
+
+Every answerable question is answered with its correct source (6/8 source
+hits, 0.8–2.8 s each); Q8 — which the materials cannot answer — is
+acknowledged rather than invented, and Q7's answer honestly reports that the
+retrieved evidence lacks the specific recommendation. Full rows in
+`results/eval_live.json` (`--save-md` writes `results/eval_live.md`).
 
 ---
 
@@ -292,10 +312,25 @@ report with per-question answers, source-support checks, and timings.
   `require_keys()` gives a clear, key-free message before any request.
 - **pypdf could not parse the syllabus PDF** ("wrong pointing object" xref
   errors) — switched to PyMuPDF, which handles the file cleanly.
-- **API keys are redacted in the shared endpoint doc** (verified: all class
-  services return 401 without keys). Whole-service integration and
-  answer-quality evaluation remain blocked until the team supplies keys —
-  everything else is exercised with mocks/fakes.
+- **API keys were redacted in the shared endpoint doc** (verified: all class
+  services return 401 without keys). Once the team's key file arrived, the
+  whole service was exercised live — see Tested vs. unchecked.
+- **The embedding services' token budget is really a pixel budget.** The
+  visual-embedding model re-tiles detailed images, so a downscaled photo can
+  still exceed the 8192-token cap at ANY resolution (measured: 78/250 corpus
+  images fail at 256px, 35 at 128px, some even at 64px). Images are therefore
+  downscaled to a 128px long edge before embedding, and any image the service
+  still rejects is skipped (logged) instead of blocking the corpus — the live
+  index covers 85 of the 95 illustrated pages, and the display always uses the
+  full-resolution original.
+- **The vision LLM is a reasoning model.** Thinking arrives in
+  `message.reasoning`, so with a small token budget `content` came back
+  `null` and every answer failed validation. Thinking is now disabled via the
+  vLLM chat-template knob (`enable_thinking: false`) with a 2048-token answer
+  budget — verified against 9001 (deterministic, ~1–3 s answers).
+- **Class-service base URLs already end in `/v1`.** The client appended its
+  own `/v1` paths and produced `/v1/v1/embeddings` 404s (earlier
+  misdiagnosed as gateway flakiness); URL construction now de-duplicates.
 - **LibreOffice is not installed here** — PPTX→PDF slide rendering is
   implemented but only mock-tested; the `pages == slides` check runs once
   LibreOffice is installed.
@@ -306,7 +341,7 @@ report with per-question answers, source-support checks, and timings.
 
 ## Tested vs. unchecked
 
-**Tested (91 passing, runnable without keys):** parsing of all formats;
+**Tested (97 passing, runnable without keys):** parsing of all formats;
 chunking; sha256 dedupe (repeat upload is a no-op); removal cascade (vectors +
 images + registry); keyword/text/visual retrieval + fusion + rerank wiring
 (fake transports); structured answer validation (bad JSON, un-retrieved
@@ -315,11 +350,17 @@ hidden solutions, score == key, explainable feedback; full service e2e
 (ingest → ask → quiz → grade) in offline mode; the light/dark UI flows
 (screenshots above); CI (pytest + .env/key-leak scan).
 
-**Unchecked / needs team keys:** live semantic retrieval & reranking against
-the class models; real LLM answer correctness + source support + timing
-(answer-quality evaluation); real generated quizzes; Gradio light/dark with
-real model outputs; LibreOffice conversion of the actual decks here; true
-"teammate deploys from a fresh clone" run (steps below are written for it).
+**Verified live against the class services (online mode):** real-embedding
+index (2048-dim text + visual; 164 text + 85 visual vectors over the 7
+course files); keyword+text+visual fusion with the real reranker; grounded
+LLM answers with citations (meme → Week 2 · slide 33, final exam → 15% from
+the syllabus); generated quizzes with hidden solutions, grading, and reveals;
+the answer-quality pass above (6/8 source hits; no invention on Q8).
+
+**Unchecked / needs team action:** per-question correctness beyond the 8-query
+set; LibreOffice conversion of the actual decks (not installed here);
+"teammate deploys from a fresh clone" run — the steps below are written for
+it (offline mode boots with zero env, so it works without keys).
 
 ---
 
@@ -341,8 +382,9 @@ scripts/
   evaluate.py            repeatable retrieval comparisons (results/ saved)
 docs/architecture.svg    architecture diagram (embedded above)
 docs/screenshots/        app screenshots (light/dark)
-tests/                   pytest: unit + env-gated integration (91 tests)
+tests/                   pytest: unit + env-gated integration (97 tests)
 materials/               course files (gitignored — Canvas downloads)
+results/                 eval outputs (retrieval comparison + live answer pass)
 ```
 
 ## Security rules (assignment requirement)
