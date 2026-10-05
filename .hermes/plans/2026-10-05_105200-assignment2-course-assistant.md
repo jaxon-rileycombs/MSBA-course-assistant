@@ -77,13 +77,22 @@ Each issue below has completion checks; the team picks ownership. Branch
    (`bm25s`, `langchain-text-splitters`, `chromadb`, `gradio`, others).
    `.env.example` with dummy values; `.env` gitignored; CI greps for leaked
    keys; integration tests env-gated. *(issue 1)*
-2. **Ingestion** — supported formats (PDF/PPTX/DOCX/MD/TXT/HTML) + explicit
-   "we accept …" message; extract original page/slide images; parse via class
-   service where documented (fallback local libs); chunk with
-   source-preserving metadata; deterministic chunk IDs. *(issue 2)*
+2. **Ingestion + document management** — supported formats (PDF/PPTX/DOCX/
+   MD/TXT/HTML) + explicit "we accept …" message; extract original page/slide
+   images; parse via class service where documented (fallback local libs);
+   chunk with source-preserving metadata; deterministic chunk IDs.
+   **Requirement 1:** add/remove documents through the app; doc_id = sha256 →
+   same file twice is a no-op; remove() purges text+visual index entries,
+   images, and the registry so later answers never rely on removed material.
+   **PowerPoint:** direct PPTX parsing is the primary path; optional
+   LibreOffice headless → PDF conversion (brew install --cask libreoffice)
+   for full-slide rendering, with a converted-slide correctness check
+   (pages == slides + sample renders); manual PDF export documented as a
+   workaround; formats + conversion steps go in README/UI. *(issue 2)*
 3. **Indexing** — two separate chroma collections (`text_chunks`,
    `visual_pages`); embeddings from class services; `scripts/ingest.py`
-   idempotent (upsert by ID, removes deleted docs). *(issue 3)*
+   idempotent (upsert by ID, sha256 dedupe, removes deleted docs via a
+   `data/registry.json` cascade). *(issue 3)*
 4. **Hybrid retrieval** — BM25 + text emb + visual emb → score-normalized
    fusion (weights configurable) → class rerank → evidence list (doc, page,
    section, excerpt, image path). Query→visual mapping: use text-embedding of
@@ -136,8 +145,12 @@ is part of issue 1.
   placeholders). All five services return 401 without a key (verified). Real
   keys are pending from the team — they go only into local `.env`. Code and
   unit tests proceed with mocks meanwhile; integration work is gated on keys.
+- **LibreOffice is NOT installed on the dev machine** — PPTX stays the
+  primary parse path (python-pptx + embedded images). The LibreOffice PDF
+  conversion is implemented as an optional, documented script gated on
+  `soffice` being present; manual PDF export is the documented workaround.
 - dots.mocr (9005) request format — vLLM-served; consult `/docs` and the HF
-  page; fall back to local libs (pypdf, python-pptx) for text extraction.
+  page; fall back to local libs (pypdf/pymupdf, python-pptx) for extraction.
 - Query→visual-space embedding approach — validate against the visual
   service's documented API (`/v1/embeddings` vs `/v2/embed`) before finalizing.
 - Class services are plain HTTP on campus network — treat as trusted-network;
