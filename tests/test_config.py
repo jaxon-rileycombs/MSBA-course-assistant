@@ -64,3 +64,13 @@ def test_base_url_trailing_slash_stripped():
     env = dict(ENV_OK)
     env["CLASS_TEXT_EMBED_BASE_URL"] = "http://dobolyi.com:9002/"
     assert Config.from_env(env).text_embed.base_url == "http://dobolyi.com:9002"
+
+
+def test_require_keys_raises_when_missing_and_ok_when_present():
+    with pytest.raises(ConfigError, match="Vision LLM"):
+        Config.from_env(ENV_OK).require_keys()
+    env = dict(ENV_OK)
+    for prefix in ("CLASS_VISION_LLM", "CLASS_TEXT_EMBED", "CLASS_VISUAL_EMBED",
+                   "CLASS_RERANK", "CLASS_PARSE"):
+        env[f"{prefix}_API_KEY"] = "k"
+    assert Config.from_env(env).require_keys() is not None
