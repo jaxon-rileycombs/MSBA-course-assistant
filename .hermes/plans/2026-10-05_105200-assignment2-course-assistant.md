@@ -96,18 +96,32 @@ Each issue below has completion checks; the team picks ownership. Branch
 4. **Hybrid retrieval** — BM25 + text emb + visual emb → score-normalized
    fusion (weights configurable) → class rerank → evidence list (doc, page,
    section, excerpt, image path). Query→visual mapping: use text-embedding of
-   the query against visual index; document the choice. *(issue 4)*
+   the query against visual index; document the choice.
+   **Requirement 2:** visual retrieval must surface relevant slide IMAGES
+   (visual index over page/slide renders), not just text chunks — evidence
+   lists carry image paths up to answer rendering so pictures of the actual
+   slides can be shown. *(issue 4)*
 5. **Grounded answering** — evidence-bundle prompt; vision LLM; strict JSON
    `answer` + `sources`; validators (schema, source resolves, excerpt
    verbatim); one corrective retry; else "cannot answer from materials";
    `missing_info` flag; keys never logged. *(issue 5)*
 6. **Citations** — render doc + page/slide/section + verbatim excerpt or page
    screenshot, original image shown for visual evidence; shared renderer used
-   by quiz feedback. *(issue 6)*
+   by quiz feedback.
+   **Requirement 2:** answers show pictures of the actual slides PLUS document
+   name + slide number; users can ask the app to explain slide content
+   (pictures/diagrams/charts) via the vision LLM. Acceptance: Week 2 "Vibe
+   Coding on Prod" meme slide is retrieved, displayed, and summarized with a
+   source that checks against the original slide. *(issue 6)*
 7. **Quiz engine** — material picker + topic filter; seeded MCQ generation
    grounding every question in a chunk; fixed server-side answer key;
    solutions hidden until answered or explicitly requested; scoring +
-   explanations with citations. *(issue 7)*
+   explanations with citations.
+   **Requirement 3 (verification):** confirm generated questions are
+   answerable from the selected material; solutions stay hidden until the
+   user answers or requests them; scores match the answer key; explanations
+   are useful and their cited sources support the correct answer — as
+   automated tests AND a documented manual walkthrough. *(issue 7)*
 8. **UI + evaluation + README** — Gradio tabs; the one design-choice
    comparison; README (setup, screenshots, findings, limitations, tested-vs-
    unchecked, glossary); security pass. *(issue 8)*
