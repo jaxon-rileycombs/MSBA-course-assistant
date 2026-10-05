@@ -9,7 +9,7 @@ answers and citable evidence (document + page/slide + verbatim excerpt +
 original slide images). The class services (vision LLM, embeddings, rerank,
 parsing) run on `dobolyi.com` ports 9001–9005.
 
-> **Status: complete & tested (91 pytest tests).** The app runs end-to-end.
+> **Status: complete & tested (94 pytest tests).** The app runs end-to-end.
 > With the team's API keys it uses the class services ("online" mode);
 > without keys it automatically drops into a clearly-labelled **offline
 > mode** (keyword retrieval + deterministic stand-ins) so everything is
@@ -67,7 +67,7 @@ cp .env.example .env
 ### 4. Verify the install (no keys needed)
 
 ```bash
-pytest -m "not integration" -q     # expect: all tests pass (91)
+pytest -m "not integration" -q     # expect: all tests pass (94)
 python scripts/evaluate.py --save-md   # local retrieval evaluation over materials/
 ```
 
