@@ -70,6 +70,20 @@ class Config:
         """True when every service has a non-empty API key (integration-ready)."""
         return all(s.api_key for s in self.services)
 
+    def require_keys(self) -> "Config":
+        """Raise :class:`ConfigError` when any service lacks an API key.
+
+        Entry points that talk to class services call this so the app fails
+        with a clear, key-free message instead of a 401 deep in a request.
+        """
+        missing = [s.name for s in self.services if not s.api_key]
+        if missing:
+            raise ConfigError(
+                "Class services are not configured for: " + ", ".join(missing)
+                + ". Add the real API keys to your local .env (see .env.example)."
+            )
+        return self
+
     @classmethod
     def from_env(cls, env: Optional[Mapping[str, str]] = None) -> "Config":
         env = dict(os.environ if env is None else env)

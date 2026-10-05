@@ -74,9 +74,14 @@ class _BaseClient:
     def _post(self, payload: dict) -> dict:
         last: Optional[Any] = None
         for attempt in range(self._retries):
-            resp = self._session.post(
-                self.url, json=payload, headers=self._headers(), timeout=self._timeout
-            )
+            try:
+                resp = self._session.post(
+                    self.url, json=payload, headers=self._headers(), timeout=self._timeout
+                )
+            except requests.RequestException as exc:  # network-level failure
+                last = exc
+                time.sleep(0.5 * (2**attempt))
+                continue
             if resp.status_code in (408, 429) or resp.status_code >= 500:
                 last = resp
                 time.sleep(0.5 * (2**attempt))
@@ -89,8 +94,9 @@ class _BaseClient:
                 raise ClassAPIError(
                     self._svc.name, resp.status_code, f"invalid JSON response: {exc}"
                 ) from exc
+        status = getattr(last, "status_code", None) if last is not None else None
         raise ClassAPIError(
-            self._svc.name, last.status_code if last is not None else None,
+            self._svc.name, status,
             "service unreachable after retries",
         )
 

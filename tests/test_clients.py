@@ -193,3 +193,23 @@ def test_repr_never_contains_key():
     for svc in cfg.services:
         assert svc.api_key not in repr(svc)
     assert "test-key-vision" not in repr(VisionLLMClient(cfg.vision_llm))
+
+
+def test_network_failure_retries_then_raises_without_status():
+    import requests
+
+    class BrokenSession:
+        def __init__(self):
+            self.calls = 0
+
+        def post(self, url, json=None, headers=None, timeout=None):
+            self.calls += 1
+            raise requests.ConnectionError("connection refused")
+
+    s = BrokenSession()
+    c = VisionLLMClient(cfg.vision_llm, session=s, retries=2)
+    with pytest.raises(ClassAPIError) as ei:
+        c.chat([{"role": "user", "content": "q"}])
+    assert ei.value.status is None
+    assert "unreachable" in str(ei.value)
+    assert s.calls == 2
