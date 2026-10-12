@@ -166,6 +166,13 @@ correct source; the meme question finds **Week 2 · slide 33 at position 1**:
 | chunk_page (1 chunk/slide) | 7/7 | Q1 at position 3 |
 | chunk_recursive (1200, ol 150) | 7/7 | Q1 at position 1; used for the text index |
 
+**Interpretation.** Both chunkings recall all 7 answerable questions, so we keep
+**chunk_recursive** (1200 chars, 150 overlap): the recursive splitter breaks on
+sentence/paragraph boundaries instead of tearing mid-thought, it lifts the
+syllabus question from position 3 to position 1 of the ranking, and it is what
+the live text index is built on. `chunk_page` remains a useful comparison — for
+short decks where one slide = one chunk the two approaches are equivalent.
+
 **Answer quality (live, class services)** — full pipeline: real 2048-dim
 embeddings index, rerank, vision LLM. `source hit` = the expected
 document+page appears among the answer's cited sources:
@@ -186,6 +193,19 @@ hits, 0.8–2.8 s each); Q8 is acknowledged rather than invented, and Q7
 honestly reports that the retrieved evidence lacks the specific
 recommendation. Full rows: `results/eval_live.json` / `results/eval_live.md`.
 
+**Known limitations.** (i) When the materials genuinely never define a term,
+the app refuses rather than invents — e.g. "what is a large language model?"
+is declined because the decks describe LLMs but never define the term; we
+tried forcing a synthesis and the model hallucinated, so the honest refusal
+is kept by design. (ii) A few photo-heavy slides fail visual *embedding* (the
+class vision service caps images at 8192 tokens); those slides are skipped
+from the visual index with a warning but still render at full resolution in
+the UI, so they stay answerable through the model's vision. (iii) Quiz
+generation can occasionally return fewer questions than requested when the
+strict grounding rules reject candidates — the app reports the actual count
+instead of padding with filler. (iv) The public demo link is a temporary
+Gradio share tunnel; recreate it with `SHARE=1 python app.py`.
+
 ## ✅ Testing and verification
 
 - **120 pytest tests** (`pytest -q`), all runnable without keys: parsing,
@@ -199,6 +219,8 @@ recommendation. Full rows: `results/eval_live.json` / `results/eval_live.md`.
   real reranker, grounded LLM answers (meme → slide 33; final exam → 15% from
   the syllabus), generated quizzes with grading and reveals, and the
   answer-quality pass above.
+- **Light and dark modes** both verified live: text, controls, and source
+  images stay readable in each theme (dark-mode screenshot below).
 - **CI** (GitHub Actions): pytest on every push plus a secret-leak scan that
   fails the build if `.env` or a key string appears in the repository.
 
