@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from course_assistant.service import ALL_SCOPE, CourseAssistant, ServiceDirs
+from course_assistant.qa.schema import Answer
+from course_assistant.retrieval.evidence import Evidence
+from course_assistant.service import ALL_SCOPE, CourseAssistant, ServiceDirs, _meme_candidate_score
 from test_formats import make_pptx
 
 
@@ -102,6 +104,44 @@ def test_quiz_flow_hides_grades_reveals(app):
     revealed = svc.reveal_quiz(quiz_id)
     assert revealed["questions"][0]["answer_index"] == 0
     assert revealed["questions"][0]["explanation"]
+    source = revealed["questions"][0]["sources"][0]
+    assert source["excerpt"]
+    assert source["image_path"] and Path(source["image_path"]).exists()
+
+
+def test_meme_queries_prioritize_visual_meme_candidates(app, monkeypatch):
+    svc, _ = app
+    meme = Evidence(
+        doc_id="meme",
+        document="Week 2.pptx",
+        page=33,
+        section="Vibe Coding on Prod",
+        text="Vibe Coding on Prod Notes: reddit.com/r/vibecoding/example",
+        image_path="lord-of-the-rings.png",
+    )
+    ordinary = Evidence(
+        doc_id="other",
+        document="Week 3.pptx",
+        page=2,
+        section="Prompting",
+        text="Prompt engineering overview",
+    )
+    monkeypatch.setattr(svc, "_meme_evidence", lambda: [meme])
+    monkeypatch.setattr(svc._hybrid, "retrieve", lambda *args, **kwargs: [ordinary])
+    seen = {}
+
+    class CaptureAnswerer:
+        def answer(self, question, evidence):
+            seen["evidence"] = evidence
+            return Answer(answer="Found it.")
+
+    svc.answerer = CaptureAnswerer()
+    svc.ask("Find the memes in the slides")
+
+    assert seen["evidence"][0].page == 33
+    assert len(seen["evidence"]) == 1  # unrelated retrieval cannot distract visual search
+    assert _meme_candidate_score(meme.text, meme.section) > 0
+    assert _meme_candidate_score("ordinary Reddit API documentation", "API") == 0
 
 
 def test_topic_filter_limits_evidence(app):
@@ -116,6 +156,16 @@ def test_topic_filter_limits_evidence(app):
     answer2 = svc.ask("what?", topic="embedded")  # 'embedded concepts' in the deck text
     assert "Slide 2 title" in answer2.answer or "embedded" in answer2.answer.lower()
     assert answer2.sources and all("Week 2.pptx" == s.document for s in answer2.sources)
+
+
+def test_service_dirs_can_be_isolated_with_environment(monkeypatch):
+    monkeypatch.setenv("COURSE_ASSISTANT_VECTOR_DIR", "vectorstore-online")
+    monkeypatch.setenv("COURSE_ASSISTANT_REGISTRY_PATH", "data/registry-online.json")
+
+    dirs = ServiceDirs()
+
+    assert dirs.vector_dir == "vectorstore-online"
+    assert dirs.registry_path == "data/registry-online.json"
 
 
 def test_quiz_topic_filter_is_strict(app):

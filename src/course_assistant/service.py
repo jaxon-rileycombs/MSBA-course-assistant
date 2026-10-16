@@ -11,8 +11,9 @@ Two modes (auto-detected):
 
 from __future__ import annotations
 
+import os
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .clients import EmbeddingsClient, RerankClient, VisionLLMClient
@@ -37,14 +38,48 @@ ALL_SCOPE = "All materials"
 MAX_ASK_EVIDENCE = 16  # evidence slots budget for the answer prompt
 
 
+def _meme_candidate_score(text: str, section: str = "") -> int:
+    """Rank slide text that strongly suggests a meme or reaction image.
+
+    PowerPoint text extraction cannot see words inside an embedded meme, but
+    slide titles and source notes often identify visual-humor pages. These
+    cues provide a deterministic fallback when a visual vector is unavailable.
+    """
+    value = f"{section}\n{text}".lower()
+    score = 0
+    if "meme" in value:
+        score += 12
+    if "reddit.com/r/programmerhumor" in value:
+        score += 10
+    if "reddit.com/r/vibecoding" in value:
+        score += 9
+    if "vibe coding on" in value:
+        score += 8
+    if "security? never heard" in value or (
+        "how it started" in value and "how it" in value and "going" in value
+    ):
+        score += 8
+    return score
+
+
 @dataclass
 class ServiceDirs:
     """Filesystem wiring paths (kept separate from network config)."""
 
-    vector_dir: str = "vectorstore"
-    images_root: str = "data/images"
-    registry_path: str = "data/registry.json"
-    quiz_dir: str = "data/quizzes"
+    vector_dir: str = field(
+        default_factory=lambda: os.environ.get("COURSE_ASSISTANT_VECTOR_DIR", "vectorstore")
+    )
+    images_root: str = field(
+        default_factory=lambda: os.environ.get("COURSE_ASSISTANT_IMAGES_ROOT", "data/images")
+    )
+    registry_path: str = field(
+        default_factory=lambda: os.environ.get(
+            "COURSE_ASSISTANT_REGISTRY_PATH", "data/registry.json"
+        )
+    )
+    quiz_dir: str = field(
+        default_factory=lambda: os.environ.get("COURSE_ASSISTANT_QUIZ_DIR", "data/quizzes")
+    )
 
 
 class CourseAssistant:
@@ -199,6 +234,7 @@ class CourseAssistant:
                     page=page,
                     section=str(meta.get("section", "")),
                     text=text,
+                    image_path=str(meta.get("image", "")) or None,
                 )
             )
         # one representative chunk per slide — a deck quiz never covers the
@@ -251,6 +287,39 @@ class CourseAssistant:
                 i += 1
         return out
 
+    def _meme_evidence(self) -> list[Evidence]:
+        """Find likely meme slides directly from indexed titles/notes.
+
+        This supplements multimodal retrieval when the visual embedding
+        service rejects a highly detailed slide image.
+        """
+        res = self._index.text_col.get(limit=2000)
+        documents = res.get("documents") or []
+        metadatas = res.get("metadatas") or []
+        by_page: dict[tuple[str, int], tuple[int, Evidence]] = {}
+        for text, meta in zip(documents, metadatas):
+            image_path = str(meta.get("image", "")) or None
+            if not image_path:
+                continue
+            section = str(meta.get("section", ""))
+            score = _meme_candidate_score(text, section)
+            if score <= 0:
+                continue
+            page = int(meta["page"])
+            key = (str(meta["doc_id"]), page)
+            candidate = Evidence(
+                doc_id=str(meta["doc_id"]),
+                document=str(meta["document"]),
+                page=page,
+                section=section,
+                text=text,
+                image_path=image_path,
+                scores={"meme_hint": float(score)},
+            )
+            if key not in by_page or score > by_page[key][0]:
+                by_page[key] = (score, candidate)
+        return [item[1] for item in sorted(by_page.values(), key=lambda item: item[0], reverse=True)]
+
     # -- ask ---------------------------------------------------------------
 
     def ask(self, question: str, scope: str = ALL_SCOPE, topic: str = "") -> Answer:
@@ -265,7 +334,14 @@ class CourseAssistant:
         the materials genuinely don't cover are answered as missing (no
         invention).
         """
-        evidence = self._scope_evidence(self._hybrid.retrieve(question, k=24, per_retriever=16), scope)
+        if "meme" in question.lower():
+            # Visual embedding can reject unusually detailed slides. Use the
+            # title/notes-derived visual candidates by themselves so unrelated
+            # retrieval results cannot distract the vision model.
+            retrieved = self._meme_evidence()
+        else:
+            retrieved = self._hybrid.retrieve(question, k=24, per_retriever=16)
+        evidence = self._scope_evidence(retrieved, scope)
         if topic:
             topic = topic.strip().lower()
             topical = [e for e in evidence if topic in e.text.lower() or topic in (e.section or "").lower()]

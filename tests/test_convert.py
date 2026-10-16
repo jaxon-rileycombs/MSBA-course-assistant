@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from course_assistant.ingest.convert import convert_decks, find_soffice
+from course_assistant.ingest.convert import convert_decks, find_soffice, render_pptx_slides
 
 
 def test_find_soffice_returns_none_when_missing(monkeypatch):
@@ -17,6 +17,23 @@ def test_convert_decks_raises_friendly_error_without_soffice(tmp_path, monkeypat
     (tmp_path / "deck.pptx").write_bytes(b"x")
     with pytest.raises(RuntimeError, match="brew install --cask libreoffice"):
         convert_decks(tmp_path)
+
+
+def test_render_pptx_slides_reuses_complete_cached_renders(tmp_path, monkeypatch):
+    deck = tmp_path / "deck.pptx"
+    deck.write_bytes(b"not opened when cache exists")
+    out = tmp_path / "images"
+    out.mkdir()
+    (out / "full_slide_2.png").write_bytes(b"two")
+    (out / "full_slide_1.png").write_bytes(b"one")
+    monkeypatch.setattr(
+        "course_assistant.ingest.convert._convert_with_powerpoint",
+        lambda *args: (_ for _ in ()).throw(AssertionError("conversion should not run")),
+    )
+
+    rendered = render_pptx_slides(deck, out)
+
+    assert [path.name for path in rendered] == ["full_slide_1.png", "full_slide_2.png"]
 
 
 def test_convert_decks_checks_page_count_matches_slides(tmp_path, monkeypatch):

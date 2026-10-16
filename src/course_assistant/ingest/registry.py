@@ -39,6 +39,10 @@ class DocumentRegistry:
             data = json.loads(self.path.read_text())
             if isinstance(data, dict):
                 self._entries = data
+                # Older registry files predate ingest_order. JSON preserves
+                # insertion order, so migrate them deterministically in memory.
+                for ingest_order, entry in enumerate(self._entries.values(), 1):
+                    entry.setdefault("ingest_order", ingest_order)
         except (ValueError, OSError):
             self._entries = {}  # corrupt registry: start clean, don't crash
 
@@ -60,12 +64,17 @@ class DocumentRegistry:
             existing = self._entries.get(document.doc_id)
             if existing is not None:
                 return existing, False
+            ingest_order = max(
+                (int(e.get("ingest_order", 0)) for e in self._entries.values()),
+                default=0,
+            ) + 1
             entry = {
                 "doc_id": document.doc_id,
                 "filename": document.filename,
                 "format": document.format,
                 "pages": document.total_pages,
                 "ingest_time": _now(),
+                "ingest_order": ingest_order,
             }
             self._entries[document.doc_id] = entry
             self._save()
@@ -87,8 +96,12 @@ class DocumentRegistry:
         return doc_id in self._entries
 
     def list(self) -> list[dict]:
-        """All entries, newest first."""
-        return sorted(self._entries.values(), key=lambda e: e["ingest_time"], reverse=True)
+        """All entries, newest first with deterministic timestamp tie-breaking."""
+        return sorted(
+            self._entries.values(),
+            key=lambda e: (e["ingest_time"], int(e.get("ingest_order", 0))),
+            reverse=True,
+        )
 
     def __len__(self) -> int:
         return len(self._entries)

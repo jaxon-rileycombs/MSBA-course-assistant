@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 """Repeatable evaluation harness (assignment requirement 5).
 
-Compares retrieval configurations on the SAME question set and course files.
-Currently active configs (all local, no API keys needed):
-    chunk_page        - one chunk per page/slide (native unit) + BM25
-    chunk_recursive   - recursive 1200-char split (overlap 150) + BM25
-Metrics per question (k = top-k evidence):
-    recall@k          - expected document (+page) appears in the top-k
-    retrieval_seconds - wall time for the retrieval step
+Compares two RAG approaches on the SAME questions and course files:
+    chunk_page        - one chunk per page/slide + BM25
+    chunk_recursive   - recursive 1200-character chunks + BM25
 
-When the class-service keys are available and the QA pipeline lands
-(issues 4-5), run `--with-answers` to add: answer text, source-support
-check, answer seconds, and a manual-review correctness column.
+Every row records retrieval recall and latency. With ``--with-answers``,
+each approach also generates an answer from its own retrieved evidence and
+records answer latency, expected-source support, and an explicit manual
+correctness field. Reviewers fill the latter in the saved canonical results.
 
 Usage:
     python scripts/evaluate.py [--configs chunk_page,chunk_recursive]
@@ -33,9 +30,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import bm25s  # noqa: E402
 
+from course_assistant.eval.answer_quality import evaluate_answer  # noqa: E402
 from course_assistant.eval.questions import QUESTION_SET  # noqa: E402
 from course_assistant.ingest.chunking import chunk_document  # noqa: E402
 from course_assistant.ingest.formats import parse_document  # noqa: E402
+from course_assistant.qa.answer import Answerer  # noqa: E402
+from course_assistant.retrieval.evidence import Evidence  # noqa: E402
 
 CHUNK_CONFIGS = {
     "chunk_page": {"chunk_size": 10**9, "chunk_overlap": 0},
@@ -46,14 +46,17 @@ K = 5
 
 
 def load_corpus(materials_dir: Path, images_root: Path, chunk_config: dict):
-    """Parse every material and chunk it with the given config."""
+    """Parse materials and return chunks plus original slide-image paths."""
     chunks = []
+    images: dict[tuple[str, int], str | None] = {}
     for f in sorted(materials_dir.iterdir()):
         if f.suffix.lower() not in (".pdf", ".pptx", ".docx", ".md", ".txt", ".html"):
             continue
         doc = parse_document(f, images_root)
         chunks.extend(chunk_document(doc, **chunk_config))
-    return chunks
+        for page in doc.pages:
+            images[(doc.filename, page.number)] = page.image_paths[0] if page.image_paths else None
+    return chunks, images
 
 
 def build_bm25(chunks):
@@ -140,8 +143,15 @@ def answer_pass() -> list[dict]:
     return rows
 
 
-def run_config(name: str, chunk_config: dict, materials_dir: Path, images_root: Path, k: int) -> list[dict]:
-    chunks = load_corpus(materials_dir, images_root, chunk_config)
+def run_config(
+    name: str,
+    chunk_config: dict,
+    materials_dir: Path,
+    images_root: Path,
+    k: int,
+    answerer=None,
+) -> list[dict]:
+    chunks, images = load_corpus(materials_dir, images_root, chunk_config)
     retriever = build_bm25(chunks)
     rows = []
     for spec in QUESTION_SET:
@@ -149,7 +159,7 @@ def run_config(name: str, chunk_config: dict, materials_dir: Path, images_root: 
         top = retrieve(retriever, chunks, spec["question"], k)
         elapsed = round(time.perf_counter() - t0, 4)
         hits = [expected_hit(spec, c) for c, _ in top]
-        rows.append({
+        row = {
             "config": name,
             "question_id": spec["id"],
             "kind": spec["kind"],
@@ -159,7 +169,34 @@ def run_config(name: str, chunk_config: dict, materials_dir: Path, images_root: 
             "top_documents": [c.document for c, _ in top[:3]],
             "top_pages": [c.page for c, _ in top[:3]],
             "note": "",
-        })
+        }
+        if answerer is not None:
+            evidence = [
+                Evidence(
+                    doc_id=c.doc_id,
+                    document=c.document,
+                    page=c.page,
+                    section=c.section,
+                    text=c.text,
+                    image_path=images.get((c.document, c.page)),
+                    score=score,
+                )
+                for c, score in top
+            ]
+            try:
+                row.update(evaluate_answer(spec, evidence, answerer))
+            except Exception as exc:
+                row.update({
+                    "answer": None,
+                    "missing_info": None,
+                    "source_support": False,
+                    "answer_correct": None,
+                    "answer_seconds": None,
+                    "cited_documents": [],
+                    "cited_pages": [],
+                    "note": f"answer error: {type(exc).__name__}: {exc}",
+                })
+        rows.append(row)
     return rows
 
 
@@ -176,15 +213,17 @@ def main() -> None:
     args = ap.parse_args()
 
     all_rows: list[dict] = []
-
+    answerer = None
     if args.with_answers:
-        print("=== live full-pipeline answer pass ===")
-        answer_rows = answer_pass()
-        all_rows.extend(answer_rows)
-        for r in answer_rows:
-            print(f"  {r['question_id']:20} source_hit={r['source_hit']} "
-                  f"missing={r['missing_info']} t={r['retrieval_seconds']}s "
-                  f"answer: {(r['answer'] or r['note'])[:80]}")
+        from dotenv import load_dotenv
+        from course_assistant.clients import VisionLLMClient
+        from course_assistant.config import load_config
+
+        load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+        net = load_config()
+        if not net.keys_present:
+            sys.exit("--with-answers requires class API keys in .env")
+        answerer = Answerer(VisionLLMClient(net.vision_llm))
 
     materials_dir = Path(args.materials)
     images_root = Path(args.images_root)
@@ -192,7 +231,14 @@ def main() -> None:
         if name not in CHUNK_CONFIGS:
             sys.exit(f"unknown config {name!r}; choose from {', '.join(CHUNK_CONFIGS)}")
         print(f"\n=== config: {name} ===")
-        rows = run_config(name, CHUNK_CONFIGS[name], materials_dir, images_root, args.k)
+        rows = run_config(
+            name,
+            CHUNK_CONFIGS[name],
+            materials_dir,
+            images_root,
+            args.k,
+            answerer=answerer,
+        )
         all_rows.extend(rows)
         for r in rows:
             print(f"  {r['question_id']:20} recall@k={r['recall_at_k']} "
@@ -207,8 +253,9 @@ def main() -> None:
     if args.save_md:
         md_path = out.with_suffix(".md")
         with_answers = any("answer" in r for r in all_rows)
-        cols = (["config", "question", "kind", "recall@k", "hit pos", "time (s)"]
-                + (["answer (truncated)", "source hit"] if with_answers else []))
+        cols = (["config", "question", "kind", "recall@k", "hit pos", "retrieval (s)"]
+                + (["answer (truncated)", "source support", "answer correct", "answer (s)"]
+                   if with_answers else []))
         lines = ["| " + " | ".join(cols) + " |", "|---" * len(cols) + "|"]
         for r in all_rows:
             row = [r["config"], r["question_id"], r["kind"],
@@ -218,7 +265,9 @@ def main() -> None:
             if with_answers:
                 ans = r.get("answer")
                 row.append((ans or r.get("note", ""))[:60].replace("|", "/"))
-                row.append(r.get("source_hit", "-"))
+                row.append(r.get("source_support", "-"))
+                row.append(r.get("answer_correct") if r.get("answer_correct") is not None else "REVIEW")
+                row.append(r.get("answer_seconds", "-"))
             lines.append("| " + " | ".join(str(c) for c in row) + " |")
         md_path.write_text("\n".join(lines) + "\n")
         print(f"wrote {md_path}")

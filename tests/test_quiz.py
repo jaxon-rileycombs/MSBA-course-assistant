@@ -16,7 +16,8 @@ _FAKE_SVC = ServiceConfig(name="fake", base_url="http://fake", model="fake-model
 
 EVIDENCE = [
     Evidence(doc_id="d1", document="Week 2.pptx", page=33, section="Vibe Coding on Prod",
-             text="One does not simply vibe code a production-grade enterprise app."),
+             text="One does not simply vibe code a production-grade enterprise app.",
+             image_path="slide33.png"),
     Evidence(doc_id="d1", document="Week 2.pptx", page=34, section="Safety",
              text="Speculative decoding can double throughput in some settings."),
     Evidence(doc_id="d2", document="Syllabus.pdf", page=2, section="Grading",
@@ -54,10 +55,15 @@ def test_validate_questions_filters_bad_ones():
         {"question": "x", "options": ["a", "b"], "answer_index": 0,
          "sources": [{"document": "Ghost.pptx", "page": 9}]},                         # unretrieved source
     ]
-    out = validate_questions(good + bad, allowed)
-    assert len(out) == 2  # good one + the well-formed question whose ghost source got filtered
-    assert out[0].sources[0]["page"] == 33
-    assert out[1].sources == []
+    out = validate_questions(good + bad, EVIDENCE)
+    assert len(out) == 1  # unsupported citations invalidate the question
+    assert out[0].sources[0] == {
+        "document": "Week 2.pptx",
+        "page": 33,
+        "section": "Vibe Coding on Prod",
+        "excerpt": "One does not simply vibe code a production-grade enterprise app.",
+        "image_path": "slide33.png",
+    }
 
 
 def test_generator_parses_structured_quiz():
@@ -70,7 +76,7 @@ def test_generator_parses_structured_quiz():
     }
     payload = {"quiz": [GOOD_Q, second]}
     llm = FakeLLM([json.dumps(payload)])
-    qs = QuizGenerator(llm, n=2).generate(EVIDENCE)
+    qs = QuizGenerator(llm, n=2).generate([EVIDENCE[0], EVIDENCE[-1]])
     assert llm.calls == 1 and len(qs) == 2
     # grounded: the correct option is present in the cited evidence
     assert qs[0].sources[0]["page"] == 33
@@ -190,6 +196,16 @@ def test_session_persists_and_reloads(tmp_path):
     assert s2.get(qid)["title"] == "P"
     assert s2.submit(qid, [1]).score == 1
     assert [q["quiz_id"] for q in s2.list_all()] == [qid]
+
+
+def test_session_rejects_unsafe_quiz_ids(tmp_path):
+    session = QuizSession(tmp_path / "quizzes")
+    questions = [Question("Q?", ["a", "b"], 0, "e", [])]
+    with pytest.raises(ValueError):
+        session.create("unsafe", questions, quiz_id="../outside")
+    with pytest.raises(ValueError):
+        session.get("../outside")
+    assert not (tmp_path / "outside.json").exists()
 
 
 def test_session_validates_answer_count(tmp_path):

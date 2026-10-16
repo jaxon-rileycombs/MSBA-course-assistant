@@ -179,6 +179,8 @@ def test_answerer_sends_downscaled_images_for_slide_heavy_evidence(tmp_path):
     assert any(p["type"] == "image_url" for p in content[1:])
     assert all(p["image_url"]["url"].startswith("data:image/jpeg;base64,") for p in content[1:])
     assert "EVIDENCE IMAGES: 2 images" in content[0]["text"]
+    assert "attached image 1" in content[0]["text"]
+    assert "visual questions" in content[0]["text"].lower()
 
 
 def test_parse_json_payload_lenient():

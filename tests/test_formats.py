@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+import course_assistant.ingest.formats as formats_module
 from course_assistant.ingest.formats import UnsupportedFormatError, parse_document
 
 PNG_1PX = base64.b64decode(
@@ -83,7 +84,30 @@ def test_pptx_slides_text_title_and_images(tmp_path, images_root):
     assert d.pages[0].image_paths[0].startswith(str(images_root / d.doc_id))
 
 
-def test_pptx_without_pictures_has_no_images(tmp_path, images_root):
+def test_pptx_full_slide_rendering_is_preferred(tmp_path, images_root, monkeypatch):
+    deck = make_pptx(tmp_path / "deck.pptx", with_picture=False)
+    monkeypatch.setenv("COURSE_ASSISTANT_RENDER_PPTX", "1")
+
+    def fake_render(_deck, out_dir):
+        paths = []
+        for n in (1, 2):
+            path = out_dir / f"full_slide_{n}.png"
+            path.write_bytes(PNG_1PX)
+            paths.append(path)
+        return paths
+
+    monkeypatch.setattr(formats_module, "render_pptx_slides", fake_render)
+    document = parse_document(deck, images_root)
+
+    assert [Path(page.image_paths[0]).name for page in document.pages] == [
+        "full_slide_1.png",
+        "full_slide_2.png",
+    ]
+    assert all(len(page.image_paths) == 1 for page in document.pages)
+
+
+def test_pptx_without_pictures_has_no_images(tmp_path, images_root, monkeypatch):
+    monkeypatch.delenv("COURSE_ASSISTANT_RENDER_PPTX", raising=False)
     d = parse_document(make_pptx(tmp_path / "deck.pptx", with_picture=False), images_root)
     assert d.pages[0].image_paths == []
 
