@@ -29,7 +29,7 @@ from .quiz.generator import OfflineQuizGenerator, QuizGenerator
 from .quiz.session import QuizSession
 from .retrieval.embeddings_service import TextEmbedderAdapter, VisualEmbedderAdapter
 from .retrieval.embedding_retriever import TextEmbeddingRetriever, VisualEmbeddingRetriever
-from .retrieval.evidence import Evidence
+from .retrieval.evidence import Evidence, page_label
 from .retrieval.hybrid import HybridRetriever
 from .retrieval.keyword import KeywordRetriever
 from .retrieval.rerank import ServiceReranker
@@ -205,12 +205,15 @@ class CourseAssistant:
             return evidence
         return [e for e in evidence if e.document == scope]
 
-    def _scope_chunks(self, scope: str, n: int) -> list[Evidence]:
+    def _scope_chunks(self, scope: str, n: int, topic: str = "") -> list[Evidence]:
         """Sample up to n evidence chunks spread across the selected
         document(s): each document contributes a share proportional to its
         size, and picks within a document are evenly spaced across its whole
         length — so a quiz about a deck never covers only its opening slides.
+        An optional topic word restricts the pool first (strict scope: a
+        topic nobody mentions yields no chunks, and the caller says so).
         """
+        topic = topic.strip().lower()
         res = self._index.text_col.get(limit=2000)
         documents = res.get("documents") or []
         metadatas = res.get("metadatas") or []
@@ -222,6 +225,8 @@ class CourseAssistant:
             page: int = meta["page"]
             if scope not in (ALL_SCOPE, "", None) and document != scope:
                 continue
+            if topic and topic not in text.lower():
+                continue  # strict topic scope: only topical chunks qualify
             by_doc.setdefault(doc_id, []).append(
                 Evidence(
                     doc_id=doc_id,
@@ -357,16 +362,15 @@ class CourseAssistant:
 
     def generate_quiz(self, scope: str = ALL_SCOPE, topic: str = "", n: int = 5,
                       title: str = "") -> tuple[str, dict]:
-        chunks = self._scope_chunks(scope, n * 4)
+        chunks = self._scope_chunks(scope, n * 4, topic=topic)
         if not chunks:
             raise RuntimeError(
                 "No course materials are indexed yet — add documents in the "
                 "Materials tab first."
+                if not topic
+                else f"No material in the selected scope mentions the topic “{topic.strip()}”. "
+                "Try a different topic, or clear the topic filter."
             )
-        if topic:
-            filtered = [c for c in chunks if topic.lower() in c.text.lower()]
-            if filtered:
-                chunks = filtered
         questions = self.quizgen.generate(chunks[: n * 4], n=n)
         quiz_id = self.sessions.create(title or "Generated quiz", questions)
         return quiz_id, self.sessions.get(quiz_id)
@@ -403,7 +407,7 @@ class CourseAssistant:
         lines: list[str] = []
         images: list[str] = []
         for s in answer.sources:
-            where = f"**{s.document}**, slide **{s.page}**"
+            where = f"**{s.document}**, {page_label(s.document)} **{s.page}**"
             if s.section:
                 where += f" — *{s.section}*"
             excerpt = " ".join(s.excerpt.split())

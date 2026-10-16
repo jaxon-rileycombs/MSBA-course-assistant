@@ -20,6 +20,7 @@ import gradio as gr
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from course_assistant.clients import ClassAPIError  # noqa: E402
+from course_assistant.retrieval.evidence import page_label  # noqa: E402
 from course_assistant.service import ALL_SCOPE, CourseAssistant  # noqa: E402
 
 MAX_QUIZ = 5
@@ -159,7 +160,7 @@ def do_generate(
         progress(1, desc="Quiz generation failed")
         gr.Info(f"Could not generate the quiz: {_friendly(exc)}")
         empty = [gr.update(visible=False)] * MAX_QUIZ
-        return qid_state, *empty, "", "", [], gr.update(visible=False), gr.update(visible=False)
+        return "", *empty, "", "", [], gr.update(visible=False), gr.update(visible=False)
     progress(0.9, desc="Preparing questions and answer choices…")
     radios = []
     for i in range(MAX_QUIZ):
@@ -189,7 +190,7 @@ def _quiz_source_details(sources: list[dict]) -> tuple[list[str], list[str]]:
         document = source.get("document", "Unknown material")
         page = source.get("page", "?")
         section = source.get("section", "")
-        heading = f"*{document}*, slide {page}"
+        heading = f"*{document}*, {page_label(document)} {page}"
         if section:
             heading += f" — {section}"
         lines.append(f"   - **Source:** {heading}")

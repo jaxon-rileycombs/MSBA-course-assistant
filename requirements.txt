@@ -12,3 +12,6 @@ pytest>=8.0,<9
 
 # Snowball English stemmer for the keyword retriever (word-form matching)
 PyStemmer>=3.0
+
+# Slide-image resizing for the vision LLM (downscaled chat parts)
+pillow>=10.0

@@ -16,7 +16,7 @@ import mimetypes
 from pathlib import Path
 
 from ..clients import chat_image_part, image_part, text_part
-from ..retrieval.evidence import Evidence
+from ..retrieval.evidence import Evidence, page_label
 from .prompt import NOT_FOUND_TEXT, build_prompt
 from .schema import Answer, SourceRef
 from .validate import parse_json_payload, validate_answer
@@ -106,7 +106,7 @@ class OfflineAnswerer:
             return Answer(answer=NOT_FOUND_TEXT, sources=[], missing_info=True)
         top = evs[0]
         excerpt = " ".join(top.text.split())[:600]
-        where = f"{top.document}, slide {top.page}" + (f" ({top.section})" if top.section else "")
+        where = f"{top.document}, {page_label(top.document)} {top.page}" + (f" ({top.section})" if top.section else "")
         answer_text = f"Based on {where}: {excerpt}"
         return Answer(
             answer=answer_text,

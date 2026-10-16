@@ -115,7 +115,7 @@ def test_ask_and_quiz_generation_report_progress():
 
 def test_do_generate_never_raises_and_resets_ui():
     out = do_generate(_BrokenService(), "All materials", "", 5, "state-1")
-    assert out[0] == "state-1"  # state untouched
+    assert out[0] == ""  # stale quiz id cleared: nothing hidden to grade
     assert out[-5] == "" and out[-4] == ""  # no quiz / feedback text
     assert out[-3] == []  # no source images
     assert out[-2]["visible"] is False and out[-1]["visible"] is False
