@@ -89,7 +89,8 @@ def validate_questions(raw: list, evidence) -> list[Question]:
         if evidence_list
         else set(evidence or {})
     )
-    text_by_page = {(e.document, e.page): e.text for e in evidence_list}
+    evidence_by_page = {(e.document, e.page): e for e in evidence_list}
+    text_by_page = {key: item.text for key, item in evidence_by_page.items()}
     seen: set[str] = set()
     used_pages: set[tuple[str, int]] = set()  # one question per slide
     questions: list[Question] = []
@@ -118,12 +119,23 @@ def validate_questions(raw: list, evidence) -> list[Question]:
         # the question must not give the answer away
         if _question_leaks_answer(text, options[key]):
             continue
-        # sources must be among the supplied evidence
+        # sources must be among the supplied evidence and carry the excerpt,
+        # section, and original image needed for visible quiz feedback.
         sources = []
         for s in q.get("sources", []) or []:
             if isinstance(s, dict) and isinstance(s.get("document"), str) and isinstance(s.get("page"), int):
-                if (s["document"], s["page"]) in allowed:
-                    sources.append({"document": s["document"], "page": s["page"]})
+                source_key = (s["document"], s["page"])
+                if source_key in allowed:
+                    item = evidence_by_page.get(source_key)
+                    sources.append({
+                        "document": s["document"],
+                        "page": s["page"],
+                        "section": item.section if item else "",
+                        "excerpt": item.text[:700] if item else "",
+                        "image_path": item.image_path if item else None,
+                    })
+        if evidence_list and not sources:
+            continue
         # strictly tied to the cited material
         if sources and not _grounded_in(
             options[key], str(q.get("explanation", "")), text_by_page.get((sources[0]["document"], sources[0]["page"]), "")
@@ -229,7 +241,13 @@ class OfflineQuizGenerator:
                     answer_index=0,
                     explanation=f"The cited material is “{e.section}” from {e.document}, slide {e.page}. "
                                 f"Full text: {e.text[:300]}",
-                    sources=[{"document": e.document, "page": e.page}],
+                    sources=[{
+                        "document": e.document,
+                        "page": e.page,
+                        "section": e.section,
+                        "excerpt": e.text[:700],
+                        "image_path": e.image_path,
+                    }],
                 )
             )
         return questions

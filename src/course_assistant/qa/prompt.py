@@ -17,7 +17,12 @@ NOT_FOUND_TEXT = (
 )
 
 
-def build_prompt(question: str, evidence: list[Evidence], n_images: int = 0) -> str:
+def build_prompt(
+    question: str,
+    evidence: list[Evidence],
+    n_images: int = 0,
+    image_numbers: dict[str, int] | None = None,
+) -> str:
     lines = [
         "You are a course assistant for MBAX 6418. Answer the QUESTION using ONLY the EVIDENCE below.",
         "",
@@ -26,11 +31,20 @@ def build_prompt(question: str, evidence: list[Evidence], n_images: int = 0) -> 
         "",
         "EVIDENCE (each entry: [document | page/slide | section]):",
     ]
+    image_numbers = image_numbers or {}
     for i, ev in enumerate(evidence, 1):
         excerpt = " ".join(ev.text.split())
         if len(excerpt) > 800:
             excerpt = excerpt[:800] + " …"
-        lines.append(f"{i}. [{ev.document} | slide {ev.page}" + (f" | {ev.section}" if ev.section else "") + f"] {excerpt}")
+        image_label = ""
+        if ev.image_path and ev.image_path in image_numbers:
+            image_label = f" | attached image {image_numbers[ev.image_path]}"
+        lines.append(
+            f"{i}. [{ev.document} | slide {ev.page}"
+            + (f" | {ev.section}" if ev.section else "")
+            + image_label
+            + f"] {excerpt}"
+        )
     if n_images:
         lines.append(
             "EVIDENCE IMAGES: " + ("an image" if n_images == 1 else f"{n_images} images")
@@ -40,6 +54,8 @@ def build_prompt(question: str, evidence: list[Evidence], n_images: int = 0) -> 
     lines += [
         "",
         "INSTRUCTIONS:",
+        "- For visual questions, inspect the attached slide images and describe what is visibly shown, even when text extraction missed words inside the image.",
+        "- When visual details come from an image, cite that slide and use a short verbatim title or text fragment from the same evidence entry as the excerpt.",
         "- If the EVIDENCE does not contain the answer, reply with sources: [] and say the materials do not cover this.",
         "- Reply with ONE JSON object, no extra text:",
         '  {"answer": "<concise answer>", "sources": [{"document": "<filename>", "page": <int>, "section": "<section>", "excerpt": "<verbatim quote from evidence>"}]}',

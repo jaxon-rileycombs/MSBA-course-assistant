@@ -46,6 +46,85 @@ def _page_count(pdf: Path) -> int:
         return doc.page_count
 
 
+def _ps_quote(value: str) -> str:
+    """Quote a literal for a single-quoted PowerShell string."""
+    return value.replace("'", "''")
+
+
+def _convert_with_powerpoint(pptx: Path, pdf: Path) -> Path | None:
+    """Use installed Microsoft PowerPoint on Windows as a rendering fallback."""
+    powershell = shutil.which("powershell.exe") or shutil.which("powershell")
+    if sys.platform != "win32" or powershell is None:
+        return None
+    source = _ps_quote(str(pptx.resolve()))
+    target = _ps_quote(str(pdf.resolve()))
+    script = (
+        "$ErrorActionPreference='Stop'; "
+        "$app=New-Object -ComObject PowerPoint.Application; "
+        "try { "
+        f"$presentation=$app.Presentations.Open('{source}', $true, $true, $false); "
+        f"$presentation.SaveAs('{target}', 32); "
+        "$presentation.Close(); "
+        "} finally { $app.Quit() }"
+    )
+    try:
+        subprocess.run(
+            [powershell, "-NoProfile", "-NonInteractive", "-Command", script],
+            check=True,
+            capture_output=True,
+            timeout=600,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return pdf if pdf.exists() else None
+
+
+def render_pptx_slides(pptx: Path, out_dir: Path) -> list[Path]:
+    """Render complete PPTX slides to PNG using LibreOffice or PowerPoint.
+
+    Returns an empty list when neither renderer is available or conversion
+    fails, allowing the parser to fall back to extracting embedded pictures.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cached = sorted(
+        out_dir.glob("full_slide_*.png"),
+        key=lambda path: int(path.stem.rsplit("_", 1)[-1]),
+    )
+    if cached:
+        return cached
+
+    pdf = out_dir / "_full_slides.pdf"
+    rendered_pdf: Path | None = None
+    soffice = find_soffice()
+    if soffice is not None:
+        try:
+            rendered_pdf = convert_pptx_to_pdf(pptx, out_dir, soffice)
+        except (OSError, subprocess.SubprocessError):
+            rendered_pdf = None
+    if rendered_pdf is None:
+        rendered_pdf = _convert_with_powerpoint(pptx, pdf)
+    if rendered_pdf is None or not rendered_pdf.exists():
+        return []
+
+    import pymupdf
+
+    images: list[Path] = []
+    try:
+        with pymupdf.open(str(rendered_pdf)) as document:
+            for slide_number, page in enumerate(document, 1):
+                image_path = out_dir / f"full_slide_{slide_number}.png"
+                page.get_pixmap(matrix=pymupdf.Matrix(2, 2)).save(image_path)
+                images.append(image_path)
+    except (OSError, RuntimeError, ValueError):
+        return []
+    finally:
+        try:
+            rendered_pdf.unlink()
+        except OSError:
+            pass
+    return images
+
+
 def convert_decks(materials_dir: str | Path, out_dir: str | Path | None = None) -> list[tuple[str, int, int, bool]]:
     """Convert every .pptx under materials_dir; returns (name, slides, pages, ok)."""
     materials_dir = Path(materials_dir)

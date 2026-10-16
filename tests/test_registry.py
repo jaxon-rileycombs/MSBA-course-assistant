@@ -66,3 +66,16 @@ def test_list_newest_first(tmp_path):
     reg.add(make_doc("2" * 64))
     order = [e["doc_id"] for e in reg.list()]
     assert order == ["2" * 64, "1" * 64]  # newest first
+
+
+def test_list_newest_first_when_timestamps_match(tmp_path, monkeypatch):
+    """Insertion order breaks ties on filesystems with coarse clocks."""
+    monkeypatch.setattr(
+        "course_assistant.ingest.registry._now",
+        lambda: "2026-10-15T12:00:00.000000+00:00",
+    )
+    reg = DocumentRegistry(tmp_path / "registry.json")
+    reg.add(make_doc("1" * 64))
+    reg.add(make_doc("2" * 64))
+    order = [e["doc_id"] for e in reg.list()]
+    assert order == ["2" * 64, "1" * 64]

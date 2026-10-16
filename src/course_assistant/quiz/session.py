@@ -11,6 +11,7 @@ All lookups take an explicit ``quiz_id`` (the store keeps many quizzes).
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
@@ -32,6 +33,8 @@ class QuizSession:
         self.store_dir.mkdir(parents=True, exist_ok=True)
 
     def _path(self, quiz_id: str) -> Path:
+        if not isinstance(quiz_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", quiz_id):
+            raise ValueError("invalid quiz id")
         return self.store_dir / f"{quiz_id}.json"
 
     def create(self, title: str, questions: list[Question], quiz_id: str = "") -> str:

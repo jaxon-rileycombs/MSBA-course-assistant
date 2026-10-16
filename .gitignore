@@ -8,10 +8,12 @@
 
 # ---- Vector store & extracted artifacts ----
 /vectorstore/
+/vectorstore-online/
 /.chroma/
 /data/images/
 /data/parsed/
 /data/registry.json
+/data/registry-online.json
 /results/*.jsonl
 
 # ---- Python ----

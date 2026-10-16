@@ -74,7 +74,13 @@ class Answerer:
 
     def _messages(self, question: str, evs: list[Evidence], images: list[str],
                   repair: bool) -> list[dict]:
-        prompt = build_prompt(question, evs, n_images=len(images))
+        image_numbers = {path: index for index, path in enumerate(images, 1)}
+        prompt = build_prompt(
+            question,
+            evs,
+            n_images=len(images),
+            image_numbers=image_numbers,
+        )
         if repair:
             prompt = "Repair your JSON per the instruction. " + prompt
         content: list[dict] | str

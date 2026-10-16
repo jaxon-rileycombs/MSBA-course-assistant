@@ -11,18 +11,23 @@ Commands:
 Defaults (all overridable): materials parsed from the given paths, images in
 data/images/, vectors in vectorstore/, registry in data/registry.json.
 
-Embeddings: by default uses the deterministic local HashEmbedder (no API
-keys needed; NOT semantically meaningful). Pass --real-embeddings to use the
-class services once keys are in .env (visual-embedding request format is
-finalized in issue 4).
+Embeddings: automatically uses the class services when they are configured in
+.env, matching the app's online mode. Pass --offline-embeddings only when you
+intentionally want the deterministic 256-dimensional local stand-in. Online
+and offline embeddings must never be mixed in the same vector directory.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
 from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -33,30 +38,34 @@ from course_assistant.ingest.index import IndexStore  # noqa: E402
 from course_assistant.ingest.registry import DocumentRegistry  # noqa: E402
 
 DEFAULTS = {
-    "vector_dir": "vectorstore",
-    "images_root": "data/images",
-    "registry_path": "data/registry.json",
+    "vector_dir": os.environ.get("COURSE_ASSISTANT_VECTOR_DIR", "vectorstore"),
+    "images_root": os.environ.get("COURSE_ASSISTANT_IMAGES_ROOT", "data/images"),
+    "registry_path": os.environ.get("COURSE_ASSISTANT_REGISTRY_PATH", "data/registry.json"),
 }
 
 
 def build_index(args) -> IndexStore:
     text_embedder = HashEmbedder().embed_texts
     image_embedder = HashEmbedder().embed_images
-    if getattr(args, "real_embeddings", False):
+
+    from course_assistant.config import load_config
+
+    cfg = load_config()
+    use_real = not getattr(args, "offline_embeddings", False) and cfg.keys_present
+    if use_real:
         from course_assistant.clients import EmbeddingsClient
-        from course_assistant.config import load_config
         from course_assistant.retrieval.embeddings_service import (
             TextEmbedderAdapter,
             VisualEmbedderAdapter,
         )
 
-        cfg = load_config()
-        if cfg.keys_present:
-            text_embedder = TextEmbedderAdapter(EmbeddingsClient(cfg.text_embed)).embed_texts
-            image_embedder = VisualEmbedderAdapter(EmbeddingsClient(cfg.visual_embed)).embed_images
-            print("embeddings: class services (9002/9003)")
-        else:
-            print("  ! --real-embeddings given but no API keys in .env — using local stand-in embeddings")
+        text_embedder = TextEmbedderAdapter(EmbeddingsClient(cfg.text_embed)).embed_texts
+        image_embedder = VisualEmbedderAdapter(EmbeddingsClient(cfg.visual_embed)).embed_images
+        print("embeddings: class services (9002/9003)")
+    elif getattr(args, "real_embeddings", False) and not cfg.keys_present:
+        print("  ! --real-embeddings given but no API keys in .env — using local stand-in embeddings")
+    else:
+        print("embeddings: local 256-dimensional stand-in")
     return IndexStore(
         args.vector_dir,
         text_embedder=text_embedder,
@@ -165,7 +174,9 @@ def main() -> None:
         p.add_argument("--images-root", default=DEFAULTS["images_root"])
         p.add_argument("--registry", default=DEFAULTS["registry_path"])
         p.add_argument("--real-embeddings", action="store_true",
-                       help="use class-service embeddings (requires keys); default: local fake")
+                       help="deprecated: class embeddings are selected automatically when configured")
+        p.add_argument("--offline-embeddings", action="store_true",
+                       help="explicitly use local 256-dimensional stand-in embeddings")
 
     args = ap.parse_args()
     args.vector_dir, args.images_root, args.registry_path = (

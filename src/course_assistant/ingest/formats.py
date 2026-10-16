@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import html.parser
 import io
+import os
 from pathlib import Path
 
 try:  # pymupdf >= 1.24: modern import name
@@ -24,6 +25,7 @@ try:  # pymupdf >= 1.24: modern import name
 except ImportError:  # pragma: no cover
     import fitz  # type: ignore  # noqa: F401  (older alias)
 
+from .convert import render_pptx_slides
 from .documents import SUPPORTED_FORMATS, Document, Page, file_sha256
 
 
@@ -168,6 +170,9 @@ def _parse_pptx(path: Path, doc_id: str, images_root: Path) -> list[Page]:
     prs = _Presentation(str(path))
     out_dir = images_root / doc_id
     out_dir.mkdir(parents=True, exist_ok=True)
+    rendered_slides: list[Path] = []
+    if os.environ.get("COURSE_ASSISTANT_RENDER_PPTX", "").lower() in {"1", "true", "yes", "on"}:
+        rendered_slides = render_pptx_slides(path, out_dir)
     pages: list[Page] = []
     for n, slide in enumerate(prs.slides, 1):
         title = _slide_title(slide)
@@ -176,19 +181,22 @@ def _parse_pptx(path: Path, doc_id: str, images_root: Path) -> list[Page]:
             notes = slide.notes_slide.notes_text_frame.text.strip()
             if notes:
                 text = f"{text}\nNotes: {notes}" if text else f"Notes: {notes}"
-        image_paths: list[str] = []
-        idx = 0
-        for shape in _iter_shapes(slide.shapes):
-            if shape.shape_type != MSO_SHAPE_TYPE.PICTURE:
-                continue
-            try:
-                img = shape.image
-            except Exception:
-                continue
-            idx += 1
-            img_path = out_dir / f"slide_{n}_{idx}.{img.ext}"
-            img_path.write_bytes(img.blob)
-            image_paths.append(str(img_path))
+        if n <= len(rendered_slides):
+            image_paths = [str(rendered_slides[n - 1])]
+        else:
+            image_paths = []
+            idx = 0
+            for shape in _iter_shapes(slide.shapes):
+                if shape.shape_type != MSO_SHAPE_TYPE.PICTURE:
+                    continue
+                try:
+                    img = shape.image
+                except Exception:
+                    continue
+                idx += 1
+                img_path = out_dir / f"slide_{n}_{idx}.{img.ext}"
+                img_path.write_bytes(img.blob)
+                image_paths.append(str(img_path))
         pages.append(Page(number=n, text=text, section=title, image_paths=image_paths))
     return pages
 
