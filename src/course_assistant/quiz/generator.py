@@ -16,7 +16,7 @@ import re
 from dataclasses import asdict
 
 from ..qa.validate import parse_json_payload
-from ..retrieval.evidence import Evidence
+from ..retrieval.evidence import Evidence, page_label
 from .schema import Question
 
 
@@ -193,7 +193,7 @@ class QuizGenerator:
                 start = (attempt * want) % (len(chunks) - want + 1)
             window = chunks[start : start + want]
             evidence_txt = "\n".join(
-                f"{i}. [{e.document} | slide {e.page}" + (f" | {e.section}" if e.section else "") + f"] {e.text[:700]}"
+                f"{i}. [{e.document} | {page_label(e.document)} {e.page}" + (f" | {e.section}" if e.section else "") + f"] {e.text[:700]}"
                 for i, e in enumerate(window, 1)
             )
             prompt = QUIZ_PROMPT.format(n=want, evidence=evidence_txt)
@@ -227,7 +227,7 @@ class OfflineQuizGenerator:
                     options=[e.section or "The topic shown", "The syllabus",
                              "A random topic", "None of the above"],
                     answer_index=0,
-                    explanation=f"The cited material is “{e.section}” from {e.document}, slide {e.page}. "
+                    explanation=f"The cited material is “{e.section}” from {e.document}, {page_label(e.document)} {e.page}. "
                                 f"Full text: {e.text[:300]}",
                     sources=[{"document": e.document, "page": e.page}],
                 )

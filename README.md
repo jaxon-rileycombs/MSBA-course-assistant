@@ -1,6 +1,6 @@
 # 🎓📚 MSBA Course Assistant
 
-[![tests](https://img.shields.io/badge/tests-120%20passed-success?style=flat-square&logo=pytest&logoColor=white)](.github/workflows/ci.yml)
+[![tests](https://img.shields.io/badge/tests-121%20passed-success?style=flat-square&logo=pytest&logoColor=white)](.github/workflows/ci.yml)
 [![status](https://img.shields.io/badge/status-complete%20%E2%9C%93-brightgreen?style=flat-square)]()
 [![mode](https://img.shields.io/badge/mode-hybrid%20RAG-blue?style=flat-square&logo=openai&logoColor=white)]()
 [![type](https://img.shields.io/badge/type-ask%20%E2%9C%A6%20quiz%20%E2%9C%94-orange?style=flat-square)]()
@@ -14,7 +14,7 @@ original slide image.
 
 ## 🚀 Try the app
 
-▶ **Live demo:** https://47891497303a145377.gradio.live
+▶ **Live demo:** https://063c214b8f77d2a338.gradio.live
 *(temporary share link — up to ~1 week; recreate with `SHARE=1 python app.py`)*
 
 Run it locally in one command after installing (see [Running the app](#running-the-app)):
@@ -208,7 +208,7 @@ Gradio share tunnel; recreate it with `SHARE=1 python app.py`.
 
 ## ✅ Testing and verification
 
-- **120 pytest tests** (`pytest -q`), all runnable without keys: parsing,
+- **121 pytest tests** (`pytest -q`), all runnable without keys: parsing,
   chunking, dedupe, removal cascade, retrieval + fusion + rerank wiring,
   structured-answer validation (bad JSON, un-retrieved citations dropped,
   missing-information handling), quiz validation with hidden solutions and
@@ -273,6 +273,6 @@ scripts/
   ingest.py              material management CLI (ingest/list/remove)
   evaluate.py            retrieval + answer-quality evaluation (results/ saved)
 docs/                    architecture diagram + screenshots
-tests/                   pytest suite (120 tests)
+tests/                   pytest suite (121 tests)
 materials/               course files (gitignored — Canvas downloads)
 ```

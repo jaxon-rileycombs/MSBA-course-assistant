@@ -118,6 +118,18 @@ def test_topic_filter_limits_evidence(app):
     assert answer2.sources and all("Week 2.pptx" == s.document for s in answer2.sources)
 
 
+def test_quiz_topic_filter_is_strict(app):
+    svc, deck = app
+    svc.add_documents([str(deck)])
+    # a topic nobody mentions -> explicit error, no silent whole-deck quiz
+    with pytest.raises(RuntimeError, match="mentions the topic"):
+        svc.generate_quiz(topic="suchness-not-in-corpus", n=2)
+    # a matching topic -> quiz is generated (offline placeholder counts as one)
+    quiz_id, view = svc.generate_quiz(topic="embedded", n=2)
+    assert len(view["questions"]) == 2
+    assert svc.get_quiz(quiz_id)["quiz_id"] == quiz_id
+
+
 def test_quiz_on_empty_index_raises_friendly_runtime_error(tmp_path):
     svc = CourseAssistant(
         dirs=ServiceDirs(

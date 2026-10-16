@@ -20,6 +20,7 @@ import gradio as gr
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from course_assistant.clients import ClassAPIError  # noqa: E402
+from course_assistant.retrieval.evidence import page_label  # noqa: E402
 from course_assistant.service import ALL_SCOPE, CourseAssistant  # noqa: E402
 
 MAX_QUIZ = 5
@@ -127,7 +128,7 @@ def do_generate(service, scope: str, topic: str, n: int, qid_state):
     except Exception as exc:  # model flake or service hiccup → friendly, never a 500
         gr.Info(f"Could not generate the quiz: {_friendly(exc)}")
         empty = [gr.update(visible=False)] * MAX_QUIZ
-        return qid_state, *empty, "", ""
+        return "", *empty, "", ""  # clear stale quiz id: nothing to grade
     radios = []
     for i in range(MAX_QUIZ):
         if i < len(view["questions"]):
@@ -160,7 +161,7 @@ def do_submit(service, qid, *values):
     for i, fb in enumerate(result["feedback"]):
         mark = "✅" if fb["correct"] else "❌"
         lines.append(f"{mark} **Q{i + 1}:** {fb['explanation']}")
-        srcs = ", ".join(f"*{s['document']}* slide {s['page']}" for s in fb["sources"])
+        srcs = ", ".join(f"*{s['document']}* {page_label(s['document'])} {s['page']}" for s in fb["sources"])
         lines.append(f"{'   - sources: ' + srcs if srcs else ''}")
     return "\n\n".join(lines)
 

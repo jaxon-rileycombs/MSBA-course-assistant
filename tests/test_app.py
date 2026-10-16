@@ -76,7 +76,7 @@ def test_do_ask_empty_question_is_a_noop():
 
 def test_do_generate_never_raises_and_resets_ui():
     out = do_generate(_BrokenService(), "All materials", "", 5, "state-1")
-    assert out[0] == "state-1"  # state untouched
+    assert out[0] == ""  # stale quiz id cleared: nothing hidden to grade
     assert out[-2] == "" and out[-1] == ""  # no quiz / feedback text
 
 

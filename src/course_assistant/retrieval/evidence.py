@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
+def page_label(document: str) -> str:
+    """Citation unit for a document: \"slide\" for decks, \"page\" otherwise."""
+    return "slide" if document.lower().endswith(".pptx") else "page"
+
+
 @dataclass
 class Evidence:
     """A retrieved chunk/page with full provenance.
