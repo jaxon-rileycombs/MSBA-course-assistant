@@ -14,7 +14,7 @@ original slide image.
 
 ## 🚀 Try the app
 
-▶ **Live demo:** https://e8b43e5b0f6a0a5b1c.gradio.live
+▶ **Live demo:** https://6a66459429e288b332.gradio.live
 *(temporary share link — up to ~1 week; recreate with `SHARE=1 python app.py`)*
 
 Run it locally in one command after installing (see [Running the app](#running-the-app)):
